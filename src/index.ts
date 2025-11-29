@@ -4,6 +4,158 @@ function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Conta quantos imóveis existem na página atual
+ */
+async function contarImoveisNaPagina(page: Page): Promise<number> {
+  await page.waitForSelector("#paginacao", { timeout: 10000 });
+  
+  const totalImoveis = await page.evaluate(() => {
+    const imoveis = document.querySelectorAll('ul.control-group.no-bullets');
+    return imoveis.length;
+  });
+
+  return totalImoveis;
+}
+
+/**
+ * Extrai o nome do imóvel da div específica, removendo inputs e pegando apenas o texto do h5
+ */
+async function extrairNomeImovel(page: Page): Promise<string> {
+  const nomeImovel = await page.evaluate(() => {
+    const div = document.querySelector('div.control-item.control-span-12_12');
+    if (!div) {
+      return '';
+    }
+
+    const h5 = div.querySelector('h5');
+    if (!h5) {
+      return '';
+    }
+
+    // Clona o h5 para não modificar o original
+    const h5Clone = h5.cloneNode(true) as HTMLElement;
+    
+    // Remove todos os inputs dentro do h5
+    const inputs = h5Clone.querySelectorAll('input');
+    inputs.forEach(input => input.remove());
+
+    // Retorna apenas o texto, removendo espaços extras
+    return h5Clone.textContent?.trim() || '';
+  });
+
+  return nomeImovel;
+}
+
+/**
+ * Navega para um imóvel específico na página atual pelo índice
+ */
+async function navegarParaImovel(page: Page, indice: number): Promise<void> {
+  await page.waitForSelector("#paginacao", { timeout: 10000 });
+  
+  await page.evaluate((index) => {
+    const imoveis = document.querySelectorAll('ul.control-group.no-bullets');
+    if (imoveis[index]) {
+      const linkDetalhes = imoveis[index].querySelector('a[onclick*="detalhe_imovel"]');
+      if (linkDetalhes) {
+        (linkDetalhes as HTMLElement).click();
+      }
+    }
+  }, indice);
+
+  await delay(1500);
+}
+
+/**
+ * Obtém o total de páginas disponíveis
+ */
+async function obterTotalPaginas(page: Page): Promise<number> {
+  await page.waitForSelector("#paginacao", { timeout: 10000 });
+
+  const totalPaginas = await page.evaluate(() => {
+    const paginacaoDiv = document.querySelector("#paginacao");
+    if (!paginacaoDiv) {
+      return 0;
+    }
+    
+    const links = paginacaoDiv.querySelectorAll('a[href*="carregaListaImoveis"]');
+    return links.length;
+  });
+
+  return totalPaginas;
+}
+
+/**
+ * Navega para uma página específica pelo índice (0 = primeira página)
+ */
+async function navegarParaPagina(page: Page, indicePagina: number): Promise<void> {
+  await page.waitForSelector("#paginacao", { timeout: 10000 });
+
+  await page.evaluate((index) => {
+    const paginacaoDiv = document.querySelector("#paginacao");
+    if (paginacaoDiv) {
+      const links = paginacaoDiv.querySelectorAll('a[href*="carregaListaImoveis"]');
+      if (links[index]) {
+        (links[index] as HTMLElement).click();
+      }
+    }
+  }, indicePagina);
+
+  await delay(2000);
+}
+
+/**
+ * Mapeia todos os imóveis de todas as páginas e retorna uma lista com os nomes
+ */
+async function mapearTodosImoveis(page: Page): Promise<string[]> {
+  const nomesImoveis: string[] = [];
+
+  // Obtém o total de páginas
+  const totalPaginas = await obterTotalPaginas(page);
+  console.log(`Total de páginas encontradas: ${totalPaginas}`);
+
+  // Itera sobre cada página
+  for (let paginaAtual = 0; paginaAtual < totalPaginas; paginaAtual++) {
+    console.log(`\nProcessando página ${paginaAtual + 1} de ${totalPaginas}...`);
+
+    // Navega para a página atual (se não for a primeira)
+    if (paginaAtual > 0) {
+      await navegarParaPagina(page, paginaAtual);
+    }
+
+    // Conta quantos imóveis tem na página atual
+    const totalImoveisNaPagina = await contarImoveisNaPagina(page);
+    console.log(`  Imóveis encontrados na página: ${totalImoveisNaPagina}`);
+
+    // Itera sobre cada imóvel da página
+    for (let indiceImovel = 0; indiceImovel < totalImoveisNaPagina; indiceImovel++) {
+      console.log(`  Processando imóvel ${indiceImovel + 1} de ${totalImoveisNaPagina}...`);
+
+      // Navega para o imóvel
+      await navegarParaImovel(page, indiceImovel);
+
+      // Extrai o nome do imóvel
+      const nomeImovel = await extrairNomeImovel(page);
+      
+      if (nomeImovel) {
+        nomesImoveis.push(nomeImovel);
+        console.log(`    Nome coletado: ${nomeImovel}`);
+      } else {
+        console.log(`    ⚠️  Nome não encontrado para o imóvel ${indiceImovel + 1}`);
+      }
+
+      // Volta para a lista de imóveis
+      await page.goBack();
+      await delay(2000);
+      
+      // Aguarda a paginação aparecer novamente
+      await page.waitForSelector("#paginacao", { timeout: 10000 });
+    }
+  }
+
+  return nomesImoveis;
+}
+
 interface DadosImovel {
   imagem: string;
   valores: {
@@ -214,76 +366,21 @@ async function start() {
   });
 
   await makeInitialProcess(page);
+
+  // Mapeia todos os imóveis de todas as páginas
+  const nomesImoveis = await mapearTodosImoveis(page);
+
+  // Imprime todos os nomes coletados
+  console.log("\n" + "=".repeat(80));
+  console.log("RESUMO FINAL - TODOS OS IMÓVEIS COLETADOS");
+  console.log("=".repeat(80));
+  console.log(`\nTotal de imóveis coletados: ${nomesImoveis.length}\n`);
   
-
-  await page.waitForSelector("#paginacao", { timeout: 10000 });
-
-  const { totalPaginas, linksPaginas } = await page.evaluate(() => {
-    const paginacaoDiv = document.querySelector("#paginacao");
-    if (!paginacaoDiv) {
-      return { totalPaginas: 0, linksPaginas: [] };
-    }
-    
-    const links = paginacaoDiv.querySelectorAll('a[href*="carregaListaImoveis"]');
-    const linksArray: string[] = [];
-    
-    links.forEach((link) => {
-      const href = link.getAttribute('href') || '';
-      linksArray.push(href);
-    });
-    
-    return {
-      totalPaginas: links.length,
-      linksPaginas: linksArray
-    };
+  nomesImoveis.forEach((nome, index) => {
+    console.log(`${index + 1}. ${nome}`);
   });
-
-  // Busca e conta as divs de imóveis
-  const totalImoveis = await page.evaluate(() => {
-    const imoveis = document.querySelectorAll('ul.control-group.no-bullets');
-    return imoveis.length;
-  });
-
-  // Clica na primeira div de imóvel encontrada
-  if (totalImoveis > 0) {
-    await page.evaluate(() => {
-      const primeiroImovel = document.querySelector('ul.control-group.no-bullets');
-      if (primeiroImovel) {
-        const linkDetalhes = primeiroImovel.querySelector('a[onclick*="detalhe_imovel"]');
-        if (linkDetalhes) {
-          (linkDetalhes as HTMLElement).click();
-        }
-      }
-    });
-  }
-
-  await delay(1500);
-
-  const dadosImovel = await extrairDadosImovel(page);
-
-  // Volta uma página no navegador
-  await page.goBack();
-  await delay(2000);
-
-  // Aguarda a div de paginação aparecer novamente
-  await page.waitForSelector("#paginacao", { timeout: 10000 });
-
-  // Clica no segundo componente de página (índice 1, pois o primeiro é índice 0)
-  if (linksPaginas.length >= 2) {
-    await page.evaluate((index) => {
-      const paginacaoDiv = document.querySelector("#paginacao");
-      if (paginacaoDiv) {
-        const links = paginacaoDiv.querySelectorAll('a[href*="carregaListaImoveis"]');
-        if (links[index]) {
-          (links[index] as HTMLElement).click();
-        }
-      }
-    }, 1); // Índice 1 = segunda página
-  }
-
-  await delay(2000);
   
-  await delay(13000);
+  console.log("\n" + "=".repeat(80));
 
   await browser.close();
 }
