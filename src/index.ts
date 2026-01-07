@@ -63,7 +63,11 @@ async function navegarParaImovel(page: Page, indice: number): Promise<void> {
     }
   }, indice);
 
-  await delay(1500);
+  // Aguarda a página de detalhes carregar verificando se o elemento #preview existe
+  await page.waitForSelector("#preview", { timeout: 10000 }).catch(() => {
+    // Se #preview não existir, aguarda pelo menos o body estar carregado
+    return page.waitForSelector("body", { timeout: 10000 });
+  });
 }
 
 /**
@@ -146,10 +150,16 @@ async function mapearTodosImoveis(page: Page): Promise<string[]> {
 
       // Volta para a lista de imóveis
       await page.goBack();
-      await delay(2000);
       
-      // Aguarda a paginação aparecer novamente
-      await page.waitForSelector("#paginacao", { timeout: 10000 });
+      // Aguarda a paginação aparecer novamente e a lista de imóveis estar carregada
+      await page.waitForFunction(
+        () => {
+          const paginacao = document.querySelector("#paginacao");
+          const imoveis = document.querySelectorAll('ul.control-group.no-bullets');
+          return paginacao !== null && imoveis.length > 0;
+        },
+        { timeout: 10000 }
+      );
     }
   }
 
