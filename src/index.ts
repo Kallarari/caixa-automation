@@ -1,5 +1,9 @@
 import puppeteer, { Page } from "puppeteer";
 import pool from "./database/config";
+import {
+  PropertyData,
+  PropertyRepository,
+} from "./repositories/PropertyRepository";
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -18,36 +22,6 @@ async function contarImoveisNaPagina(page: Page): Promise<number> {
 
   return totalImoveis;
 }
-
-/**
- * Extrai o nome do imóvel da div específica, removendo inputs e pegando apenas o texto do h5
- */
-async function extrairNomeImovel(page: Page): Promise<string> {
-  const nomeImovel = await page.evaluate(() => {
-    const div = document.querySelector("div.control-item.control-span-12_12");
-    if (!div) {
-      return "";
-    }
-
-    const h5 = div.querySelector("h5");
-    if (!h5) {
-      return "";
-    }
-
-    // Clona o h5 para não modificar o original
-    const h5Clone = h5.cloneNode(true) as HTMLElement;
-
-    // Remove todos os inputs dentro do h5
-    const inputs = h5Clone.querySelectorAll("input");
-    inputs.forEach((input) => input.remove());
-
-    // Retorna apenas o texto, removendo espaços extras
-    return h5Clone.textContent?.trim() || "";
-  });
-
-  return nomeImovel;
-}
-
 /**
  * Navega para um imóvel específico na página atual pelo índice
  */
@@ -77,10 +51,21 @@ async function navegarParaImovel(page: Page, indice: number): Promise<void> {
  * Obtém o total de páginas disponíveis
  */
 async function obterTotalPaginas(page: Page): Promise<number> {
-  await page.waitForSelector("#paginacao", { timeout: 10000 });
+  try {
+    await page.waitForSelector("#paginacao", { timeout: 5000 });
+  } catch (error) {
+    // Se não encontrar a paginação, verifica se há imóveis na página
+    const temImoveis = await page.evaluate(() => {
+      const imoveis = document.querySelectorAll("ul.control-group.no-bullets");
+      return imoveis.length > 0;
+    });
+    console.log("temImoveis: " + temImoveis);
+    return temImoveis ? 1 : 0;
+  }
 
   const totalPaginas = await page.evaluate(() => {
     const paginacaoDiv = document.querySelector("#paginacao");
+
     if (!paginacaoDiv) {
       return 0;
     }
@@ -88,7 +73,9 @@ async function obterTotalPaginas(page: Page): Promise<number> {
     const links = paginacaoDiv.querySelectorAll(
       'a[href*="carregaListaImoveis"]'
     );
-    return links.length;
+
+    // Se não há links de paginação mas há a div, significa 1 página
+    return links.length > 0 ? links.length : 1;
   });
 
   return totalPaginas;
@@ -121,11 +108,12 @@ async function navegarParaPagina(
 /**
  * Mapeia todos os imóveis de todas as páginas e retorna uma lista com os nomes
  */
-async function mapearTodosImoveis(page: Page): Promise<string[]> {
-  const nomesImoveis: string[] = [];
+async function extractAllPropertiesData(page: Page): Promise<DadosImovel[]> {
+  const propertiesData: Array<DadosImovel> = [];
 
   // Obtém o total de páginas
   const totalPaginas = await obterTotalPaginas(page);
+
   console.log(`Total de páginas encontradas: ${totalPaginas}`);
 
   // Itera sobre cada página
@@ -149,22 +137,18 @@ async function mapearTodosImoveis(page: Page): Promise<string[]> {
       indiceImovel < totalImoveisNaPagina;
       indiceImovel++
     ) {
-      console.log(
-        `  Processando imóvel ${indiceImovel + 1} de ${totalImoveisNaPagina}...`
-      );
-
       // Navega para o imóvel
       await navegarParaImovel(page, indiceImovel);
 
-      // Extrai o nome do imóvel
-      const nomeImovel = await extrairNomeImovel(page);
+      // Extrai os dados do imóvel
+      const propertyData = await extractPropertyData(page);
 
-      if (nomeImovel) {
-        nomesImoveis.push(nomeImovel);
-        console.log(`    Nome coletado: ${nomeImovel}`);
+      if (propertyData) {
+        propertiesData.push(propertyData);
+        console.log(`    Dados coletados de: ${propertyData.titulo}`);
       } else {
         console.log(
-          `    ⚠️  Nome não encontrado para o imóvel ${indiceImovel + 1}`
+          `    ⚠️  Dados não encontrados para o imóvel ${indiceImovel + 1}`
         );
       }
 
@@ -185,7 +169,7 @@ async function mapearTodosImoveis(page: Page): Promise<string[]> {
     }
   }
 
-  return nomesImoveis;
+  return propertiesData;
 }
 
 interface DadosImovel {
@@ -225,6 +209,7 @@ interface DadosImovel {
     cidade: string;
     estado: string;
   };
+  titulo: string;
   descricao: string;
   formasPagamento: string;
   regrasDespesas: string;
@@ -232,11 +217,11 @@ interface DadosImovel {
 }
 
 //função que extrai os dados de imóveis da página de imóveis
-async function extrairDadosImovel(page: Page): Promise<DadosImovel> {
+async function extractPropertyData(page: Page): Promise<DadosImovel> {
   await page.waitForSelector("body", { timeout: 10000 });
   await page.waitForSelector("#preview", { timeout: 10000 });
 
-  const dadosImovel = await page.evaluate(() => {
+  const dadosImovel = await page.evaluate(async () => {
     const bodyText = document.body.innerText || document.body.textContent || "";
 
     const imgPreview = document.querySelector("#preview") as HTMLImageElement;
@@ -250,6 +235,29 @@ async function extrairDadosImovel(page: Page): Promise<DadosImovel> {
     const extrairValorMonetario = (padrao: RegExp, texto: string): string => {
       const match = texto.match(padrao);
       return match ? match[1].trim() : "";
+    };
+
+    const extrairTitulo = (texto: string): string => {
+      const div = document.querySelector("div.control-item.control-span-12_12");
+      if (!div) {
+        return "";
+      }
+
+      const h5 = div.querySelector("h5");
+      if (!h5) {
+        return "";
+      }
+
+      // Clona o h5 para não modificar o original
+      const h5Clone = h5.cloneNode(true) as HTMLElement;
+
+      // Remove todos os inputs dentro do h5
+      const inputs = h5Clone.querySelectorAll("input");
+      inputs.forEach((input) => input.remove());
+
+      // Retorna apenas o texto, removendo espaços extras
+      const titulo = h5Clone.textContent?.trim() || "";
+      return titulo;
     };
 
     const extrairNumero = (padrao: RegExp, texto: string): string => {
@@ -269,6 +277,7 @@ async function extrairDadosImovel(page: Page): Promise<DadosImovel> {
       /Valor mínimo de venda 2º Leilão:\s*(R\$\s*[\d.,]+)/i,
       bodyText
     );
+    const titulo = extrairTitulo(bodyText);
     const tipoImovel = extrairValor(/Tipo de imóvel:\s*(.+)/i, bodyText);
     const quartos = extrairNumero(/Quartos:\s*(\d+)/i, bodyText);
     const garagem = extrairNumero(/Garagem:\s*(\d+)/i, bodyText);
@@ -280,6 +289,7 @@ async function extrairDadosImovel(page: Page): Promise<DadosImovel> {
       /Inscrição imobiliária:\s*(.+)/i,
       bodyText
     );
+
     const averbacaoLeiloesNegativos = extrairValor(
       /Averbação dos leilões negativos:\s*(.+)/i,
       bodyText
@@ -346,23 +356,23 @@ async function extrairDadosImovel(page: Page): Promise<DadosImovel> {
 
       // Pega o texto interno da div (que contém &nbsp;21&nbsp;)
       const textoCompleto = elemento.innerHTML || elemento.innerText || "";
-      
+
       // Remove tags HTML e &nbsp;
       const textoLimpo = textoCompleto
         .replace(/&nbsp;/g, " ")
         .replace(/<[^>]*>/g, "")
         .trim();
-      
+
       // Extrai apenas os números
       const match = textoLimpo.match(/\d+/);
       if (match) {
         const valor = parseInt(match[0], 10);
         return isNaN(valor) ? null : valor;
       }
-      
+
       return null;
     };
-    
+
     const dias = extrairTempoContador("dias0");
     const horas = extrairTempoContador("horas0");
     const minutos = extrairTempoContador("minutos0");
@@ -375,10 +385,15 @@ async function extrairDadosImovel(page: Page): Promise<DadosImovel> {
       segundos: number | null
     ): string | null => {
       // Se não houver nenhum valor, retorna null
-      if (dias === null && horas === null && minutos === null && segundos === null) {
+      if (
+        dias === null &&
+        horas === null &&
+        minutos === null &&
+        segundos === null
+      ) {
         return null;
       }
-      if(dias === 0 && horas === 0 && minutos === 0 && segundos === 0) {
+      if (dias === 0 && horas === 0 && minutos === 0 && segundos === 0) {
         return new Date().toISOString();
       }
 
@@ -443,6 +458,7 @@ async function extrairDadosImovel(page: Page): Promise<DadosImovel> {
         cidade,
         estado,
       },
+      titulo,
       dataFimLeilao,
       descricao,
       formasPagamento,
@@ -529,21 +545,25 @@ async function getCities(page: Page) {
   return cities.slice(1, cities.length);
 }
 
-// função que seleciona o estado do paraná e depois curitiba
-async function makeInitialProcess(page: Page, state: string = "PR") {
-
+// pega os valores do seletor de cidades pora todos os estados
+async function getAllCitiesForAllStates(page: Page) {
   await page.waitForSelector("#cmb_estado");
 
   const states = await getStates(page);
-  
-  const data: Array<{ state: string; cities: Array<{ innerText: string; value: string }> }> = [];
+
+  const data: Array<{
+    state: string;
+    cities: Array<{ innerText: string; value: string }>;
+  }> = [];
 
   for (let i = 0; i < states.length; i++) {
     await page.select("#cmb_estado", states[i].value);
-  
+
     await page.waitForFunction(
       () => {
-        const select = document.querySelector("#cmb_cidade") as HTMLSelectElement;
+        const select = document.querySelector(
+          "#cmb_cidade"
+        ) as HTMLSelectElement;
         return select && select.options.length > 1;
       },
       { timeout: 10000 }
@@ -553,43 +573,79 @@ async function makeInitialProcess(page: Page, state: string = "PR") {
     const stateData = {
       state: states[i].innerText,
       cities: cities,
-    }
+    };
     data.push(stateData);
   }
 
-  return;
-  await page.select("#cmb_estado", states[1].value);
-  await delay(3000);
-  await getCities(page);
-  return;
+  return data;
+}
 
-  //seleciona PR
-  await page.select("cmb_estado", "PR");
+//função que seleciona a cidade e o estado e espera carregar a página
+async function selectCity(page: Page, city: string, state: string) {
+  console.log("selecionando cidade....");
 
-  await page.evaluate(() => {
-    if (typeof (window as any).selecionaEstado === "function") {
-      (window as any).selecionaEstado();
-    }
-  });
+  await page.select("#cmb_estado", state);
 
+  await page.waitForFunction(
+    () => {
+      const select = document.querySelector("#cmb_cidade") as HTMLSelectElement;
+      return select && select.options.length > 1;
+    },
+    { timeout: 10000 }
+  );
+
+  await page.select("#cmb_cidade", city);
   await delay(1000);
-
-  await page.waitForSelector("#cmb_cidade", { timeout: 10000 });
-
-  await delay(1000);
-
-  //seleciona Curitiba
-  await page.select("#cmb_cidade", "6143");
-
-  await delay(1000);
-
   await page.waitForSelector("#btn_next0", { timeout: 10000 });
   await page.click("#btn_next0");
 
   await page.waitForSelector("#btn_next1", { timeout: 10000 });
   await page.click("#btn_next1");
 
-  await delay(2000);
+  await delay(1000);
+
+  console.log("cidade selecionada!");
+}
+
+/**
+ * Converte DadosImovel para PropertyData (formato do banco de dados)
+ */
+function mapearParaPropertyData(dados: DadosImovel): PropertyData {
+  return {
+    titulo: dados.titulo || "",
+    imagem_url: dados.imagem || null,
+    valor_avaliacao: dados.valores.valorAvaliacao || null,
+    valor_minimo_1_leilao: dados.valores.valorMinimo1Leilao || null,
+    valor_minimo_2_leilao: dados.valores.valorMinimo2Leilao || null,
+    tipo_imovel: dados.caracteristicas.tipoImovel || null,
+    quartos: dados.caracteristicas.quartos,
+    garagem: dados.caracteristicas.garagem,
+    area_total: dados.caracteristicas.areaTotal || null,
+    area_privativa: dados.caracteristicas.areaPrivativa || null,
+    area_terreno: dados.caracteristicas.areaTerreno || null,
+    numero_imovel: dados.identificacao.numeroImovel || null,
+    matriculas: dados.identificacao.matriculas || null,
+    comarca: dados.identificacao.comarca || null,
+    oficio: dados.identificacao.oficcio,
+    inscricao_imobiliaria: dados.identificacao.inscricaoImobiliaria || null,
+    averbacao_leiloes_negativos:
+      dados.identificacao.averbacaoLeiloesNegativos || null,
+    tipo_leilao: dados.leilao.tipoLeilao || null,
+    edital: dados.leilao.edital || null,
+    numero_item: dados.leilao.numeroItem || null,
+    leiloeiro: dados.leilao.leiloeiro || null,
+    data_1_leilao: dados.leilao.data1Leilao || null,
+    data_2_leilao: dados.leilao.data2Leilao || null,
+    endereco: dados.localizacao.endereco || null,
+    cep: dados.localizacao.cep || null,
+    cidade: dados.localizacao.cidade || null,
+    estado: dados.localizacao.estado || null,
+    descricao: dados.descricao || null,
+    formas_pagamento: dados.formasPagamento || null,
+    regras_despesas: dados.regrasDespesas || null,
+    observacoes: dados.observacoes || null,
+    dataFimLeilao: dados.leilao.data2Leilao || null,
+  };
 }
 
 async function start() {
@@ -598,7 +654,9 @@ async function start() {
   // Testa a conexão com o banco de dados antes de iniciar o scraping
   try {
     console.log("🔌 Testando conexão com o banco de dados...");
-    const result = await pool.query("SELECT NOW() as current_time, version() as version");
+    const result = await pool.query(
+      "SELECT NOW() as current_time, version() as version"
+    );
     console.log("✅ Conexão com o banco de dados estabelecida com sucesso");
   } catch (error: any) {
     console.error("❌ Erro ao conectar com o banco de dados:");
@@ -620,24 +678,103 @@ async function start() {
     }
   );
 
-  await makeInitialProcess(page);
+  const cities = await getAllCitiesForAllStates(page);
 
-  // Mapeia todos os imóveis de todas as páginas
-  const nomesImoveis = await mapearTodosImoveis(page);
+  const propertyRepository = new PropertyRepository();
+  const relatorio = {
+    totalEstados: cities.length,
+    totalCidades: cities.reduce((acc, state) => acc + state.cities.length, 0),
+    cidadesProcessadas: 0,
+    cidadesComSucesso: 0,
+    cidadesComErro: 0,
+    imoveisSalvos: 0,
+    imoveisDuplicados: 0,
+    imoveisComErro: 0,
+    erros: [] as Array<{ cidade: string; estado: string; erro: string }>,
+  };
 
-  // Imprime todos os nomes coletados
+  let salvos = 0;
+  let duplicados = 0;
+  let erros = 0;
+
   console.log("\n" + "=".repeat(80));
-  console.log("RESUMO FINAL - TODOS OS IMÓVEIS COLETADOS");
+  console.log("📊 INICIANDO PROCESSAMENTO DE TODAS AS CIDADES");
   console.log("=".repeat(80));
-  console.log(`\nTotal de imóveis coletados: ${nomesImoveis.length}\n`);
 
-  nomesImoveis.forEach((nome, index) => {
-    console.log(`${index + 1}. ${nome}`);
-  });
+  for (const stateData of cities) {
+    console.log(
+      `\n🏛️  Estado: ${stateData.state} (${stateData.cities.length} cidades)`
+    );
+    for (let i = 0; i < stateData.cities.length; i++) {
+      const city = stateData.cities[i];
+      relatorio.cidadesProcessadas++;
+      try {
+        await selectCity(page, city.value, stateData.state);
+        const propertiesData = await extractAllPropertiesData(page);
+        console.log(`\nTotal de imóveis coletados: ${propertiesData.length}\n`);
 
-  console.log("\n" + "=".repeat(80));
+        console.log("\n💾 Salvando dados no banco de dados...\n");
+
+        for (const dados of propertiesData) {
+          try {
+            const propertyData = mapearParaPropertyData(dados);
+
+            // Verifica se o imóvel já existe antes de salvar
+            const existe = await propertyRepository.existsByFields(
+              propertyData
+            );
+
+            if (existe) {
+              console.log(`⏭️  Imóvel já existe (duplicado): ${dados.titulo}`);
+              duplicados++;
+            } else {
+              const id = await propertyRepository.create(propertyData);
+              console.log(
+                `✅ Imóvel salvo com sucesso (ID: ${id}): ${dados.titulo}`
+              );
+              salvos++;
+            }
+          } catch (error: any) {
+            console.error(
+              `❌ Erro ao salvar imóvel "${dados.titulo}":`,
+              error.message
+            );
+            erros++;
+          }
+        }
+      } catch (error: any) {
+        relatorio.cidadesComErro++;
+        relatorio.erros.push({
+          cidade: city.innerText,
+          estado: stateData.state,
+          erro: `Erro ao processar cidade: ${error.message}`,
+        });
+        console.error(`   ❌ Erro: ${error.message}`);
+      }
+
+      try {
+        await page.waitForSelector("#altera_0 a", { timeout: 10000 });
+        console.log("clicando no botão de voltar para a lista de cidade");
+        await page.click("#altera_0 a");
+      } catch (error: any) {
+        await page.goto(
+          "https://venda-imoveis.caixa.gov.br/sistema/busca-imovel.asp?sltTipoBusca=imoveis",
+          {
+            waitUntil: "networkidle2",
+          }
+        );
+
+        console.error(
+          `❌ Erro ao clicar no botão de voltar para a lista de cidade: ${error.message}`
+        );
+      }
+
+      await delay(1000);
+    }
+  }
 
   await browser.close();
+  return;
 }
 
 start();
