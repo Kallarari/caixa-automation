@@ -1,5 +1,5 @@
 import puppeteer, { Page } from "puppeteer";
-import { salvarDadosEmJSON } from "./database/saveData";
+import pool from "./database/config";
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -534,10 +534,8 @@ async function makeInitialProcess(page: Page, state: string = "PR") {
 
   await page.waitForSelector("#cmb_estado");
 
-  
   const states = await getStates(page);
   
-
   const data: Array<{ state: string; cities: Array<{ innerText: string; value: string }> }> = [];
 
   for (let i = 0; i < states.length; i++) {
@@ -559,7 +557,6 @@ async function makeInitialProcess(page: Page, state: string = "PR") {
     data.push(stateData);
   }
 
-  salvarDadosEmJSON(data, "cidades-teste.json");
   return;
   await page.select("#cmb_estado", states[1].value);
   await delay(3000);
@@ -597,6 +594,17 @@ async function makeInitialProcess(page: Page, state: string = "PR") {
 
 async function start() {
   console.log("Iniciando scraping...");
+
+  // Testa a conexão com o banco de dados antes de iniciar o scraping
+  try {
+    console.log("🔌 Testando conexão com o banco de dados...");
+    const result = await pool.query("SELECT NOW() as current_time, version() as version");
+    console.log("✅ Conexão com o banco de dados estabelecida com sucesso");
+  } catch (error: any) {
+    console.error("❌ Erro ao conectar com o banco de dados:");
+    console.error(`   Mensagem: ${error.message}`);
+    console.error(`   Código: ${error.code || "N/A"}`);
+  }
 
   const browser = await puppeteer.launch({
     headless: false,
