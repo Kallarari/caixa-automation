@@ -1,9 +1,5 @@
 [
   {
-    "innerText": "Selecione",
-    "value": ""
-  },
-  {
     "innerText": "ALMIRANTE TAMANDARE",
     "value": "5872"
   },
@@ -12,16 +8,8 @@
     "value": "5887"
   },
   {
-    "innerText": "ALVORADA DO SUL",
-    "value": "5889"
-  },
-  {
     "innerText": "AMPERE",
     "value": "5892"
-  },
-  {
-    "innerText": "ANDIRA",
-    "value": "5894"
   },
   {
     "innerText": "APUCARANA",
@@ -48,20 +36,16 @@
     "value": "5924"
   },
   {
-    "innerText": "BELA VISTA DO PARAISO",
-    "value": "5962"
+    "innerText": "ATALAIA",
+    "value": "5925"
   },
   {
-    "innerText": "BITURUNA",
-    "value": "5968"
+    "innerText": "BANDEIRANTES",
+    "value": "5931"
   },
   {
     "innerText": "CAFEARA",
     "value": "6012"
-  },
-  {
-    "innerText": "CAFEZAL DO SUL",
-    "value": "6016"
   },
   {
     "innerText": "CAMBE",
@@ -80,6 +64,10 @@
     "value": "6033"
   },
   {
+    "innerText": "CAMPO DO TENENTE",
+    "value": "6037"
+  },
+  {
     "innerText": "CAMPO LARGO",
     "value": "6038"
   },
@@ -92,6 +80,10 @@
     "value": "6045"
   },
   {
+    "innerText": "CARAMBEI",
+    "value": "6060"
+  },
+  {
     "innerText": "CASCAVEL",
     "value": "6068"
   },
@@ -102,6 +94,10 @@
   {
     "innerText": "CENTENARIO DO SUL",
     "value": "6077"
+  },
+  {
+    "innerText": "CEU AZUL",
+    "value": "6085"
   },
   {
     "innerText": "CIANORTE",
@@ -176,12 +172,12 @@
     "value": "6233"
   },
   {
-    "innerText": "GOIOERE",
-    "value": "6238"
-  },
-  {
     "innerText": "GUARAPUAVA",
     "value": "6261"
+  },
+  {
+    "innerText": "IBAITI",
+    "value": "6277"
   },
   {
     "innerText": "IBIPORA",
@@ -196,10 +192,6 @@
     "value": "6316"
   },
   {
-    "innerText": "JACAREZINHO",
-    "value": "6337"
-  },
-  {
     "innerText": "JAGUAPITA",
     "value": "6343"
   },
@@ -208,24 +200,24 @@
     "value": "6345"
   },
   {
-    "innerText": "JANIOPOLIS",
-    "value": "6348"
-  },
-  {
     "innerText": "JAPURA",
     "value": "6350"
+  },
+  {
+    "innerText": "JATAIZINHO",
+    "value": "6358"
   },
   {
     "innerText": "JESUITAS",
     "value": "6360"
   },
   {
-    "innerText": "LAPA",
-    "value": "6386"
-  },
-  {
     "innerText": "LARANJEIRAS DO SUL",
     "value": "6389"
+  },
+  {
+    "innerText": "LEOPOLIS",
+    "value": "6393"
   },
   {
     "innerText": "LOANDA",
@@ -240,16 +232,16 @@
     "value": "6406"
   },
   {
+    "innerText": "MALLET",
+    "value": "6411"
+  },
+  {
     "innerText": "MANDAGUACU",
     "value": "6415"
   },
   {
     "innerText": "MANDIRITUBA",
     "value": "6418"
-  },
-  {
-    "innerText": "MARECHAL CANDIDO RONDON",
-    "value": "6429"
   },
   {
     "innerText": "MARIALVA",
@@ -268,12 +260,12 @@
     "value": "6446"
   },
   {
-    "innerText": "MOREIRA SALES",
-    "value": "6470"
+    "innerText": "MARUMBI",
+    "value": "6451"
   },
   {
-    "innerText": "NOVA ESPERANCA",
-    "value": "6496"
+    "innerText": "MOREIRA SALES",
+    "value": "6470"
   },
   {
     "innerText": "NOVA OLIMPIA",
@@ -292,20 +284,12 @@
     "value": "6525"
   },
   {
-    "innerText": "PAICANDU",
-    "value": "6528"
-  },
-  {
     "innerText": "PALMAS",
     "value": "6533"
   },
   {
     "innerText": "PALOTINA",
     "value": "6542"
-  },
-  {
-    "innerText": "PARANACITY",
-    "value": "6548"
   },
   {
     "innerText": "PARANAGUA",
@@ -320,16 +304,16 @@
     "value": "6559"
   },
   {
-    "innerText": "PEABIRU",
-    "value": "6565"
-  },
-  {
     "innerText": "PEROLA",
     "value": "6571"
   },
   {
     "innerText": "PINHAIS",
     "value": "6578"
+  },
+  {
+    "innerText": "PINHALAO",
+    "value": "6582"
   },
   {
     "innerText": "PIRAQUARA",
@@ -360,12 +344,20 @@
     "value": "6641"
   },
   {
+    "innerText": "REBOUCAS",
+    "value": "6649"
+  },
+  {
+    "innerText": "RIO BRANCO DO SUL",
+    "value": "6667"
+  },
+  {
     "innerText": "ROLANDIA",
     "value": "6689"
   },
   {
-    "innerText": "SANTA FE",
-    "value": "6712"
+    "innerText": "SABAUDIA",
+    "value": "6696"
   },
   {
     "innerText": "SANTA ISABEL DO IVAI",
@@ -376,8 +368,8 @@
     "value": "6728"
   },
   {
-    "innerText": "SANTA TEREZA DO OESTE",
-    "value": "6735"
+    "innerText": "SANTA TEREZINHA DE ITAIPU",
+    "value": "6736"
   },
   {
     "innerText": "SANTO ANTONIO DA PLATINA",
@@ -396,16 +388,16 @@
     "value": "6794"
   },
   {
+    "innerText": "SAO PEDRO DO IVAI",
+    "value": "6827"
+  },
+  {
     "innerText": "SAO PEDRO DO PARANA",
     "value": "6828"
   },
   {
     "innerText": "SARANDI",
     "value": "6848"
-  },
-  {
-    "innerText": "TAMARANA",
-    "value": "6881"
   },
   {
     "innerText": "TAMBOARA",
@@ -422,6 +414,10 @@
   {
     "innerText": "TERRA BOA",
     "value": "6897"
+  },
+  {
+    "innerText": "TERRA RICA",
+    "value": "6899"
   },
   {
     "innerText": "TOLEDO",
