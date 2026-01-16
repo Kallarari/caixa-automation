@@ -43,11 +43,28 @@ async function navegarParaImovel(page: Page, indice: number): Promise<void> {
     }
   }, indice);
 
-  // Aguarda a página de detalhes carregar verificando se o elemento #preview existe
-  await page.waitForSelector("#preview", { timeout: 10000 }).catch(() => {
-    // Se #preview não existir, aguarda pelo menos o body estar carregado
-    return page.waitForSelector("body", { timeout: 10000 });
-  });
+  try {
+    // Tenta aguardar o #preview primeiro (elemento mais específico)
+    await page.waitForSelector("#preview", { timeout: 5000 });
+  } catch (error) {
+    // Se #preview não existir, tenta outros elementos que indicam que a página carregou
+    try {
+      // Tenta aguardar por elementos comuns da página de detalhes
+      await Promise.race([
+        page.waitForSelector(".content", { timeout: 5000 }),
+        page.waitForSelector("h5", { timeout: 5000 }),
+        page.waitForSelector(".control-span-12_12", { timeout: 5000 }),
+        page.waitForFunction(
+          () => document.body && document.body.innerText.length > 100,
+          { timeout: 5000 }
+        ),
+      ]);
+    } catch (error2) {
+      // Se nenhum seletor específico funcionar, apenas aguarda o body e um delay
+      await page.waitForSelector("body", { timeout: 5000 });
+      await delay(1000);
+    }
+  }
 }
 
 /**
@@ -272,7 +289,10 @@ async function extractPropertyData(page: Page): Promise<DadosImovel> {
         return "";
       }
 
-      if (modalidadeDiv[1]?.textContent === undefined || modalidadeDiv[1]?.textContent === null) {
+      if (
+        modalidadeDiv[1]?.textContent === undefined ||
+        modalidadeDiv[1]?.textContent === null
+      ) {
         return "";
       }
 
@@ -572,7 +592,7 @@ async function getCities(page: Page) {
 
     optionElements.forEach((option) => {
       const value = option.value;
-      
+
       const innerText = option.textContent?.trim() || option.innerText.trim();
 
       if (
@@ -602,6 +622,7 @@ async function getAllCitiesForAllStates(page: Page) {
 
   const data: Array<{
     state: string;
+    stateValue: string;
     cities: Array<{ innerText: string; value: string }>;
   }> = [];
 
@@ -621,6 +642,7 @@ async function getAllCitiesForAllStates(page: Page) {
     const cities = await getCities(page);
     const stateData = {
       state: states[i].innerText,
+      stateValue: states[i].value,
       cities: cities,
     };
     data.push(stateData);
@@ -749,6 +771,10 @@ async function start() {
 
   const cities = await getAllCitiesForAllStates(page);
 
+  // ===== CONFIGURAÇÃO: Defina aqui onde começar usando IDs =====
+  const ESTADO_INICIO_ID = "PE"; // ID do estado (value) - deixe vazio para começar do início
+  const CIDADE_INICIO_ID = "5266"; // ID da cidade (value) - deixe vazio para começar do início
+  // ==============================================================
   await page.reload();
 
   const propertyRepository = new PropertyRepository();
@@ -771,12 +797,68 @@ async function start() {
 
   console.log("\n" + "=".repeat(80));
   console.log("📊 INICIANDO PROCESSAMENTO DE TODAS AS CIDADES");
+  if (ESTADO_INICIO_ID && CIDADE_INICIO_ID) {
+    const estadoInicio = cities.find((s) => s.stateValue === ESTADO_INICIO_ID);
+    const cidadeInicio = estadoInicio?.cities.find(
+      (c) => c.value === CIDADE_INICIO_ID
+    );
+    if (estadoInicio && cidadeInicio) {
+      console.log(
+        `📍 Começando a partir de: ${cidadeInicio.innerText} - ${estadoInicio.state} (IDs: ${CIDADE_INICIO_ID} / ${ESTADO_INICIO_ID})`
+      );
+    } else {
+      console.log(
+        `⚠️  Aviso: IDs não encontrados. Processando todas as cidades.`
+      );
+    }
+  }
   console.log("=".repeat(80));
 
+  // Flag para controlar quando começar a processar
+  let comecarProcessamentoState = !ESTADO_INICIO_ID;
+  let comecarProcessamentoCity = !CIDADE_INICIO_ID;
+
   for (const stateData of cities) {
+    // Verifica se chegou no estado de início
+    if (
+      !comecarProcessamentoState &&
+      ESTADO_INICIO_ID &&
+      stateData.stateValue === ESTADO_INICIO_ID
+    ) {
+      comecarProcessamentoState = true;
+    }
+
+    // Se ainda não deve começar, pula este estado
+    if (!comecarProcessamentoState) {
+      console.log(
+        `⏭️  Pulando estado: ${stateData.state} (ID: ${stateData.stateValue})`
+      );
+      continue;
+    }
+
     for (let i = 0; i < stateData.cities.length; i++) {
       const city = stateData.cities[i];
+
+      // Se é o primeiro estado após começar, verifica se chegou na cidade de início
+      if (
+        !comecarProcessamentoCity &&
+        CIDADE_INICIO_ID &&
+        city.value === CIDADE_INICIO_ID
+      ) {
+        comecarProcessamentoCity = true;
+      }
+
+      // Se ainda não deve começar, pula esta cidade
+      if (!comecarProcessamentoCity) {
+        console.log(
+          `⏭️  Pulando cidade: ${city.innerText} - ${stateData.state}`
+        );
+        continue;
+      }
+
       relatorio.cidadesProcessadas++;
+      console.log(`\n📍 Processando: ${city.innerText} - ${stateData.state}`);
+
       try {
         await selectCity(page, city.value, stateData.state);
         const propertiesData = await extractAllPropertiesData(page);
@@ -809,7 +891,7 @@ async function start() {
           }
         }
       } catch (error: any) {
-         notifier.notify(
+        notifier.notify(
           {
             title: "ERRO NO SCRAPING",
             message: "Veja no console para mais detalhes",
@@ -822,7 +904,7 @@ async function start() {
           }
         );
 
-        await delay(2000); 
+        await delay(2000);
 
         relatorio.cidadesComErro++;
         relatorio.erros.push({
