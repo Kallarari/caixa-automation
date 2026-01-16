@@ -42,7 +42,7 @@ export class PropertyRepository {
    */
   async create(property: PropertyData): Promise<number> {
     const query = `
-      INSERT INTO properties (
+      INSERT INTO property_bronze (
         titulo, imagem_url, valor_avaliacao, valor_minimo_1_leilao, valor_minimo_2_leilao,
         tipo_imovel, quartos, garagem, area_total, area_privativa, area_terreno,
         numero_imovel, matriculas, comarca, oficio, inscricao_imobiliaria, averbacao_leiloes_negativos,
@@ -189,7 +189,7 @@ export class PropertyRepository {
    * Verifica se um imóvel já existe pelo número do imóvel
    */
   async existsByNumeroImovel(numeroImovel: string): Promise<boolean> {
-    const query = "SELECT id FROM properties WHERE numero_imovel = $1 LIMIT 1";
+    const query = "SELECT id FROM property_bronze WHERE numero_imovel = $1 LIMIT 1";
     const result = await pool.query(query, [numeroImovel]);
     return result.rows.length > 0;
   }
@@ -206,7 +206,7 @@ export class PropertyRepository {
     // Se não tiver numero_imovel, verifica por título + endereco + cidade
     if (property.titulo && property.endereco && property.cidade) {
       const query = `
-        SELECT id FROM properties 
+        SELECT id FROM property_bronze 
         WHERE titulo = $1 
           AND endereco = $2 
           AND cidade = $3 

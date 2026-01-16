@@ -226,6 +226,8 @@ async function extractPropertyData(page: Page): Promise<DadosImovel> {
   await page.waitForSelector("#preview", { timeout: 10000 });
 
   const dadosImovel = await page.evaluate(async () => {
+    console.log("extractPropertyData");
+
     const bodyText = document.body.innerText || document.body.textContent || "";
 
     const imgPreview = document.querySelector("#preview") as HTMLImageElement;
@@ -259,7 +261,6 @@ async function extractPropertyData(page: Page): Promise<DadosImovel> {
       const inputs = h5Clone.querySelectorAll("input");
       inputs.forEach((input) => input.remove());
 
-      // Retorna apenas o texto, removendo espaços extras
       const titulo = h5Clone.textContent?.trim() || "";
       return titulo;
     };
@@ -268,6 +269,10 @@ async function extractPropertyData(page: Page): Promise<DadosImovel> {
       const modalidadeDiv = document.querySelectorAll(".control-span-12_12");
 
       if (modalidadeDiv.length === 0) {
+        return "";
+      }
+
+      if (modalidadeDiv[1]?.textContent === undefined || modalidadeDiv[1]?.textContent === null) {
         return "";
       }
 
@@ -282,7 +287,11 @@ async function extractPropertyData(page: Page): Promise<DadosImovel> {
           return "";
         }
 
-        const textoCompleto = primeiroParagrafo?.textContent;
+        if (primeiroParagrafo.textContent === undefined) {
+          return "";
+        }
+
+        const textoCompleto = primeiroParagrafo.textContent;
 
         const regexDesconto = /desconto de (\d+,\d+%)/;
         const resultado = textoCompleto?.match(regexDesconto);
@@ -563,6 +572,7 @@ async function getCities(page: Page) {
 
     optionElements.forEach((option) => {
       const value = option.value;
+      
       const innerText = option.textContent?.trim() || option.innerText.trim();
 
       if (
@@ -739,6 +749,8 @@ async function start() {
 
   const cities = await getAllCitiesForAllStates(page);
 
+  await page.reload();
+
   const propertyRepository = new PropertyRepository();
 
   const relatorio = {
@@ -797,7 +809,7 @@ async function start() {
           }
         }
       } catch (error: any) {
-        notifier.notify(
+         notifier.notify(
           {
             title: "ERRO NO SCRAPING",
             message: "Veja no console para mais detalhes",
@@ -810,7 +822,7 @@ async function start() {
           }
         );
 
-        await delay(2000);
+        await delay(2000); 
 
         relatorio.cidadesComErro++;
         relatorio.erros.push({
