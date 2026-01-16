@@ -1,4 +1,4 @@
-import pool from '../database/config';
+import pool from "../database/config";
 
 export interface PropertyData {
   titulo: string;
@@ -33,6 +33,7 @@ export interface PropertyData {
   regras_despesas: string | null;
   observacoes: string | null;
   dataFimLeilao: string | null;
+  desconto: string | null;
 }
 
 export class PropertyRepository {
@@ -93,7 +94,7 @@ export class PropertyRepository {
       const result = await pool.query(query, values);
       return result.rows[0].id;
     } catch (error) {
-      console.error('Erro ao salvar imóvel no banco de dados:', error);
+      console.error("Erro ao salvar imóvel no banco de dados:", error);
       throw error;
     }
   }
@@ -106,18 +107,18 @@ export class PropertyRepository {
     const ids: number[] = [];
 
     try {
-      await client.query('BEGIN');
+      await client.query("BEGIN");
 
       for (const property of properties) {
         const id = await this.createWithClient(client, property);
         ids.push(id);
       }
 
-      await client.query('COMMIT');
+      await client.query("COMMIT");
       return ids;
     } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('Erro ao salvar múltiplos imóveis:', error);
+      await client.query("ROLLBACK");
+      console.error("Erro ao salvar múltiplos imóveis:", error);
       throw error;
     } finally {
       client.release();
@@ -127,18 +128,21 @@ export class PropertyRepository {
   /**
    * Método auxiliar para criar com um client específico (usado em transações)
    */
-  private async createWithClient(client: any, property: PropertyData): Promise<number> {
+  private async createWithClient(
+    client: any,
+    property: PropertyData
+  ): Promise<number> {
     const query = `
-      INSERT INTO properties (
+      INSERT INTO property_bronze (
         titulo, imagem_url, valor_avaliacao, valor_minimo_1_leilao, valor_minimo_2_leilao,
         tipo_imovel, quartos, garagem, area_total, area_privativa, area_terreno,
         numero_imovel, matriculas, comarca, oficio, inscricao_imobiliaria, averbacao_leiloes_negativos,
         tipo_leilao, edital, numero_item, leiloeiro, data_1_leilao, data_2_leilao,
         endereco, cep, cidade, estado,
-        descricao, formas_pagamento, regras_despesas, observacoes
+        descricao, formas_pagamento, regras_despesas, observacoes, desconto
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
+        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
       ) RETURNING id
     `;
 
@@ -174,6 +178,7 @@ export class PropertyRepository {
       property.formas_pagamento || null,
       property.regras_despesas || null,
       property.observacoes || null,
+      property.desconto || null,
     ];
 
     const result = await client.query(query, values);
@@ -184,7 +189,7 @@ export class PropertyRepository {
    * Verifica se um imóvel já existe pelo número do imóvel
    */
   async existsByNumeroImovel(numeroImovel: string): Promise<boolean> {
-    const query = 'SELECT id FROM properties WHERE numero_imovel = $1 LIMIT 1';
+    const query = "SELECT id FROM properties WHERE numero_imovel = $1 LIMIT 1";
     const result = await pool.query(query, [numeroImovel]);
     return result.rows.length > 0;
   }
@@ -210,7 +215,7 @@ export class PropertyRepository {
       const result = await pool.query(query, [
         property.titulo,
         property.endereco,
-        property.cidade
+        property.cidade,
       ]);
       return result.rows.length > 0;
     }
@@ -226,4 +231,3 @@ export class PropertyRepository {
     await pool.end();
   }
 }
-

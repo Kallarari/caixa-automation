@@ -4,11 +4,8 @@ import {
   PropertyData,
   PropertyRepository,
 } from "./repositories/PropertyRepository";
-const notifier = require('node-notifier');
-const path = require('path');
-
-
-
+const notifier = require("node-notifier");
+const path = require("path");
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -27,6 +24,7 @@ async function contarImoveisNaPagina(page: Page): Promise<number> {
 
   return totalImoveis;
 }
+
 /**
  * Navega para um imóvel específico na página atual pelo índice
  */
@@ -207,6 +205,7 @@ interface DadosImovel {
     leiloeiro: string;
     data1Leilao: string;
     data2Leilao: string;
+    desconto: string;
   };
   localizacao: {
     endereco: string;
@@ -265,6 +264,37 @@ async function extractPropertyData(page: Page): Promise<DadosImovel> {
       return titulo;
     };
 
+    const extraiModalidade = () => {
+      const modalidadeDiv = document.querySelectorAll(".control-span-12_12");
+
+      if (modalidadeDiv.length === 0) {
+        return "";
+      }
+
+      const modalidade = modalidadeDiv[1].textContent?.trim() || "";
+      return modalidade;
+    };
+
+    const extrairDesconto = () => {
+      try {
+        const primeiroParagrafo = document.querySelector(".content p");
+        if (!primeiroParagrafo) {
+          return "";
+        }
+
+        const textoCompleto = primeiroParagrafo?.textContent;
+
+        const regexDesconto = /desconto de (\d+,\d+%)/;
+        const resultado = textoCompleto?.match(regexDesconto);
+
+        return resultado?.[1] || "";
+      } catch (error) {
+        // Em caso de erro inesperado, retorna string vazia
+        console.warn("Erro ao extrair desconto:", error);
+        return "";
+      }
+    };
+
     const extrairNumero = (padrao: RegExp, texto: string): string => {
       const match = texto.match(padrao);
       return match ? match[1].trim() : "";
@@ -274,14 +304,17 @@ async function extractPropertyData(page: Page): Promise<DadosImovel> {
       /Valor de avaliação:\s*(R\$\s*[\d.,]+)/i,
       bodyText
     );
+
     const valorMinimo1Leilao = extrairValorMonetario(
       /Valor mínimo de venda 1º Leilão:\s*(R\$\s*[\d.,]+)/i,
       bodyText
     );
+
     const valorMinimo2Leilao = extrairValorMonetario(
       /Valor mínimo de venda 2º Leilão:\s*(R\$\s*[\d.,]+)/i,
       bodyText
     );
+
     const titulo = extrairTitulo(bodyText);
     const tipoImovel = extrairValor(/Tipo de imóvel:\s*(.+)/i, bodyText);
     const quartos = extrairNumero(/Quartos:\s*(\d+)/i, bodyText);
@@ -310,7 +343,6 @@ async function extractPropertyData(page: Page): Promise<DadosImovel> {
       bodyText
     );
 
-    const tipoLeilao = extrairValor(/^(Leilão Único|Leilão)/m, bodyText);
     const edital = extrairValor(/Edital:\s*(.+)/i, bodyText);
     const numeroItem = extrairValor(/Número do item:\s*(.+)/i, bodyText);
     const leiloeiro = extrairValor(/Leiloeiro\(a\):\s*(.+)/i, bodyText);
@@ -328,6 +360,7 @@ async function extractPropertyData(page: Page): Promise<DadosImovel> {
     const cidadeEstadoMatch = bodyText.match(
       /CEP:\s*\d{5}-\d{3},\s*(.+?)\s*-\s*(.+?)(?:\n|$)/i
     );
+
     const cidade = cidadeEstadoMatch ? cidadeEstadoMatch[1].trim() : "";
     const estado = cidadeEstadoMatch ? cidadeEstadoMatch[2].trim() : "";
 
@@ -450,12 +483,13 @@ async function extractPropertyData(page: Page): Promise<DadosImovel> {
         averbacaoLeiloesNegativos,
       },
       leilao: {
-        tipoLeilao,
+        tipoLeilao: extraiModalidade(),
         edital,
         numeroItem,
         leiloeiro,
         data1Leilao,
         data2Leilao,
+        desconto: extrairDesconto(),
       },
       localizacao: {
         endereco: enderecoCompleto.trim(),
@@ -669,6 +703,7 @@ function mapearParaPropertyData(dados: DadosImovel): PropertyData {
     regras_despesas: dados.regrasDespesas || null,
     observacoes: dados.observacoes || null,
     dataFimLeilao: dados.leilao.data2Leilao || null,
+    desconto: dados.leilao.desconto || null,
   };
 }
 
@@ -764,14 +799,14 @@ async function start() {
       } catch (error: any) {
         notifier.notify(
           {
-            title: 'ERRO NO SCRAPING',
-            message: 'Veja no console para mais detalhes',
+            title: "ERRO NO SCRAPING",
+            message: "Veja no console para mais detalhes",
             sound: true, // Only Notification Center or Windows Toasters
-            wait: true   // Wait with callback, until user action is taken against notification
+            wait: true, // Wait with callback, until user action is taken against notification
           },
           function (err: any, response: any, metadata: any) {
             if (err) console.error(err);
-            console.log('Notification sound played.');
+            console.log("Notification sound played.");
           }
         );
 
