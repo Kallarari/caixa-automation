@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "dotenv": "^16.4.7",
+    "node-notifier": "^10.0.1",
     "pg": "^8.13.1",
     "puppeteer": "^24.31.0"
   }

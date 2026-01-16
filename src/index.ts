@@ -4,6 +4,11 @@ import {
   PropertyData,
   PropertyRepository,
 } from "./repositories/PropertyRepository";
+const notifier = require('node-notifier');
+const path = require('path');
+
+
+
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -582,7 +587,23 @@ async function getAllCitiesForAllStates(page: Page) {
 
 //função que seleciona a cidade e o estado e espera carregar a página
 async function selectCity(page: Page, city: string, state: string) {
-  console.log("selecionando cidade....");
+  console.log(`selecionando cidade ${city} ...`);
+
+  const isToDelay = await page.waitForFunction(
+    () => {
+      const alter = document.querySelector("#altera_0 a");
+      if (alter) {
+        (alter as HTMLElement).click();
+        return true;
+      }
+      return false;
+    },
+    { timeout: 10000 }
+  );
+
+  if (isToDelay) {
+    await delay(2000);
+  }
 
   await page.select("#cmb_estado", state);
 
@@ -596,10 +617,13 @@ async function selectCity(page: Page, city: string, state: string) {
 
   await page.select("#cmb_cidade", city);
   await delay(1000);
+
   await page.waitForSelector("#btn_next0", { timeout: 10000 });
+
   await page.click("#btn_next0");
 
   await page.waitForSelector("#btn_next1", { timeout: 10000 });
+
   await page.click("#btn_next1");
 
   await delay(1000);
@@ -650,8 +674,8 @@ function mapearParaPropertyData(dados: DadosImovel): PropertyData {
 
 async function start() {
   console.log("Iniciando scraping...");
-
   // Testa a conexão com o banco de dados antes de iniciar o scraping
+
   try {
     console.log("🔌 Testando conexão com o banco de dados...");
     const result = await pool.query(
@@ -681,6 +705,7 @@ async function start() {
   const cities = await getAllCitiesForAllStates(page);
 
   const propertyRepository = new PropertyRepository();
+
   const relatorio = {
     totalEstados: cities.length,
     totalCidades: cities.reduce((acc, state) => acc + state.cities.length, 0),
@@ -702,17 +727,12 @@ async function start() {
   console.log("=".repeat(80));
 
   for (const stateData of cities) {
-    console.log(
-      `\n🏛️  Estado: ${stateData.state} (${stateData.cities.length} cidades)`
-    );
     for (let i = 0; i < stateData.cities.length; i++) {
       const city = stateData.cities[i];
       relatorio.cidadesProcessadas++;
       try {
         await selectCity(page, city.value, stateData.state);
         const propertiesData = await extractAllPropertiesData(page);
-        console.log(`\nTotal de imóveis coletados: ${propertiesData.length}\n`);
-
         console.log("\n💾 Salvando dados no banco de dados...\n");
 
         for (const dados of propertiesData) {
@@ -725,7 +745,6 @@ async function start() {
             );
 
             if (existe) {
-              console.log(`⏭️  Imóvel já existe (duplicado): ${dados.titulo}`);
               duplicados++;
             } else {
               const id = await propertyRepository.create(propertyData);
@@ -743,6 +762,21 @@ async function start() {
           }
         }
       } catch (error: any) {
+        notifier.notify(
+          {
+            title: 'ERRO NO SCRAPING',
+            message: 'Veja no console para mais detalhes',
+            sound: true, // Only Notification Center or Windows Toasters
+            wait: true   // Wait with callback, until user action is taken against notification
+          },
+          function (err: any, response: any, metadata: any) {
+            if (err) console.error(err);
+            console.log('Notification sound played.');
+          }
+        );
+
+        await delay(2000);
+
         relatorio.cidadesComErro++;
         relatorio.erros.push({
           cidade: city.innerText,
@@ -753,7 +787,7 @@ async function start() {
       }
 
       try {
-        await page.waitForSelector("#altera_0 a", { timeout: 10000 });
+        await page.waitForSelector("#altera_0 a", { timeout: 5000 });
         console.log("clicando no botão de voltar para a lista de cidade");
         await page.click("#altera_0 a");
       } catch (error: any) {
