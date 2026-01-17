@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-export function salvarDadosEmJSON(dados: any, nomeArquivo: string = "dados-coletados.json"): void {
+export function salvarDadosEmJSON(dados: any, nomeArquivo: string = "dados.json"): void {
     try {
       // Caminho para a raiz do projeto
       const caminhoArquivo = path.join(process.cwd(), nomeArquivo);

@@ -12,14 +12,14 @@ const pool = new Pool({
   // Se DATABASE_URL estiver definida, usa ela (formato: postgresql://user:password@host:port/database)
   // Caso contrário, usa as variáveis individuais
   connectionString: process.env.DATABASE_URL || undefined,
-  
+
   // Configurações individuais (usadas se DATABASE_URL não estiver definida)
   user: process.env.DB_USER,
   host: process.env.DB_HOST,
   database: process.env.DB_DATABASE,
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
-  
+
   // Configurações do pool
   max: 20, // máximo de clientes no pool
   idleTimeoutMillis: 30000, // fecha clientes inativos após 30 segundos
