@@ -11,6 +11,7 @@ export function mapearParaPropertyData(dados: DadosImovel): PropertyData {
     valor_avaliacao: dados.valores.valorAvaliacao || null,
     valor_minimo_1_leilao: dados.valores.valorMinimo1Leilao || null,
     valor_minimo_2_leilao: dados.valores.valorMinimo2Leilao || null,
+    valor_min_venda: dados.valores.valorMinVenda || null,
     tipo_imovel: dados.caracteristicas.tipoImovel || null,
     quartos: dados.caracteristicas.quartos,
     garagem: dados.caracteristicas.garagem,

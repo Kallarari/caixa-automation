@@ -1,12 +1,14 @@
 import { Page } from "puppeteer";
 import { StateOption, CityOption, StateData } from "../types/Scraping.types";
 import { delay } from "../utils/delay";
+import { defaultConfig } from "../config/scraping.config";
+import { ErrorHandler } from "../utils/errorHandler";
 
 /**
  * Pega as options do seletor de estados
  */
 export async function getStates(page: Page): Promise<StateOption[]> {
-  delay(1000);
+  delay(defaultConfig.actionDelayMs);
   const estados = (await page.evaluate(() => {
     const selectEstado = document.querySelector(
       "#cmb_estado"
@@ -45,7 +47,7 @@ export async function getStates(page: Page): Promise<StateOption[]> {
  * Com um estado selecionado, pega as options do seletor de cidades
  */
 export async function getCities(page: Page): Promise<CityOption[]> {
-  delay(1000);
+  delay(defaultConfig.actionDelayMs);
   const cities = (await page.evaluate(() => {
     const selectCity = document.querySelector(
       "#cmb_cidade"
@@ -86,7 +88,7 @@ export async function getCities(page: Page): Promise<CityOption[]> {
  * Pega os valores do seletor de cidades para todos os estados
  */
 export async function getAllCitiesForAllStates(page: Page): Promise<StateData[]> {
-  await page.waitForSelector("#cmb_estado");
+  await page.waitForSelector("#cmb_estado", { timeout: defaultConfig.selectorTimeoutMs });
 
   const states = await getStates(page);
 
@@ -102,7 +104,7 @@ export async function getAllCitiesForAllStates(page: Page): Promise<StateData[]>
         ) as HTMLSelectElement;
         return select && select.options.length > 1;
       },
-      { timeout: 10000 }
+      { timeout: defaultConfig.selectorTimeoutMs }
     );
 
     const cities = await getCities(page);
@@ -120,47 +122,138 @@ export async function getAllCitiesForAllStates(page: Page): Promise<StateData[]>
 /**
  * Seleciona a cidade e o estado e espera carregar a página
  */
-export async function selectCity(page: Page, city: string, state: string): Promise<void> {
-  console.log(`selecionando cidade ${city} ...`);
+async function safeClickButton(
+  page: Page,
+  selector: string,
+  stepName: string,
+  maxAttempts: number = 1
+): Promise<void> {
+  let lastError: any = null;
 
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await page.waitForSelector(selector, {
+        timeout: defaultConfig.selectorTimeoutMs,
+        visible: true,
+      });
+
+      await page.waitForFunction(
+        (sel) => {
+          const el = document.querySelector(sel) as HTMLElement | null;
+          if (!el) return false;
+          const rect = el.getBoundingClientRect();
+          const style = window.getComputedStyle(el);
+          const isHidden =
+            style.display === "none" ||
+            style.visibility === "hidden" ||
+            style.opacity === "0" ||
+            style.pointerEvents === "none";
+          const isDisabled = "disabled" in el && (el as HTMLButtonElement).disabled;
+          return rect.width > 0 && rect.height > 0 && !isHidden && !isDisabled;
+        },
+        { timeout: defaultConfig.selectorTimeoutMs },
+        selector
+      );
+
+      await page.evaluate((sel) => {
+        const el = document.querySelector(sel) as HTMLElement | null;
+        if (el) {
+          el.scrollIntoView({ block: "center", inline: "center" });
+        }
+      }, selector);
+
+      try {
+        await page.click(selector);
+      } catch (clickError) {
+        const elementHandle = await page.$(selector);
+        if (!elementHandle) {
+          throw clickError;
+        }
+        await elementHandle.click();
+      }
+
+      await delay(defaultConfig.actionDelayMs);
+      return;
+    } catch (error: any) {
+      lastError = error;
+      if (attempt < maxAttempts) {
+        await delay(defaultConfig.actionDelayMs);
+      }
+    }
+  }
+
+  const errorDetails = await ErrorHandler.captureErrorDetails(
+    lastError || new Error("Falha ao clicar no elemento"),
+    "selectCity",
+    "CityScraper.ts",
+    page,
+    selector,
+    `${stepName} tentativa=${maxAttempts}`
+  );
+  throw new Error(ErrorHandler.formatError(errorDetails));
+}
+
+/**
+ * Seleciona a cidade e o estado e espera carregar a página
+ */
+export async function selectCity(page: Page, city: string, state: string): Promise<void> {
+  console.log(`selecionando cidade ${city} do estado ${state}...`);
+
+  // Tenta clicar no botão "Alterar" se estiver na página de resultados
   const isToDelay = await page.waitForFunction(
     () => {
       const alter = document.querySelector("#altera_0 a");
-      if (alter) {
-        (alter as HTMLElement).click();
+      if (alter && alter instanceof HTMLElement) {
+        alter.click();
         return true;
       }
       return false;
     },
-    { timeout: 10000 }
-  );
+    { timeout: defaultConfig.selectorTimeoutMs }
+  ).catch(() => false);
 
   if (isToDelay) {
-    await delay(2000);
+    await delay(defaultConfig.actionDelayMs);
+    // Aguarda novamente o seletor de estado após clicar em "Alterar"
+    await page.waitForSelector("#cmb_estado", { timeout: defaultConfig.selectorTimeoutMs });
   }
 
+  await page.waitForSelector("#cmb_estado", { timeout: defaultConfig.selectorTimeoutMs });
+  // Seleciona o estado
   await page.select("#cmb_estado", state);
+  console.log(`✅ Estado ${state} selecionado`);
 
+  // Aguarda as cidades carregarem após selecionar o estado
   await page.waitForFunction(
     () => {
       const select = document.querySelector("#cmb_cidade") as HTMLSelectElement;
       return select && select.options.length > 1;
     },
-    { timeout: 10000 }
+    { timeout: defaultConfig.selectorTimeoutMs }
   );
 
+  // Seleciona a cidade
   await page.select("#cmb_cidade", city);
-  await delay(1000);
+  console.log(`✅ Cidade ${city} selecionada`);
+  await delay(defaultConfig.actionDelayMs);
 
-  await page.waitForSelector("#btn_next0", { timeout: 10000 });
+  // Clica no primeiro botão "Próximo"
+  await safeClickButton(page, "#btn_next0", "click btn_next0", 3);
 
-  await page.click("#btn_next0");
+  // Clica no segundo botão "Próximo"
+  await safeClickButton(page, "#btn_next1", "click btn_next1");
 
-  await page.waitForSelector("#btn_next1", { timeout: 10000 });
+  await delay(defaultConfig.actionDelayMs);
 
-  await page.click("#btn_next1");
+  console.log("✅ Cidade selecionada e página carregada!");
 
-  await delay(1000);
-
-  console.log("cidade selecionada!");
+  // Captura erros gerais que possam ter ocorrido
+  try {
+    // Verifica se a página carregou corretamente
+    await page.waitForSelector("#paginacao", { timeout: defaultConfig.selectorTimeoutMs });
+  } catch (error: any) {
+    // Se não encontrar #paginacao, pode ser que não há imóveis ou houve erro
+    // Mas não lança erro aqui, apenas loga
+    console.warn("⚠️  Seletor #paginacao não encontrado após selecionar cidade");
+  }
 }

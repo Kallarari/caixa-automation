@@ -4,6 +4,7 @@ export interface DadosImovel {
     valorAvaliacao: string;
     valorMinimo1Leilao: string;
     valorMinimo2Leilao: string;
+    valorMinVenda: string;
   };
   caracteristicas: {
     tipoImovel: string;

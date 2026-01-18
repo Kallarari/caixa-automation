@@ -5,7 +5,11 @@
   "scripts": {
     "dev": "ts-node src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "divide": "MODE=divide npm run dev",
+    "worker": "MODE=worker npm run dev",
+    "parallel": "powershell -ExecutionPolicy Bypass -File scripts/start-parallel.ps1",
+    "retry": "ts-node src/scripts/retryWorker.ts"
   },
   "keywords": [],
   "author": "",

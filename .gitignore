@@ -36,4 +36,8 @@ Thumbs.db
 
 # Puppeteer Chromium download cache
 **/chromium/
-.
+
+# Temporary files for parallel processing
+temp/
+worker-*.json
+worker-*-report.json

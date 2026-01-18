@@ -5,6 +5,8 @@ import { PropertyService } from "./PropertyService";
 import { StatisticsManager } from "../statistics/StatisticsManager";
 import { delay } from "../utils/delay";
 import { notifyError } from "../utils/notifier";
+import { ErrorHandler } from "../utils/errorHandler";
+import { defaultConfig } from "../config/scraping.config";
 
 export class CityService {
   constructor(
@@ -57,14 +59,28 @@ export class CityService {
         erros
       );
     } catch (error: any) {
-      notifyError("ERRO NO SCRAPING", "Veja no console para mais detalhes");
+     // notifyError("ERRO NO SCRAPING", "Veja no console para mais detalhes");
       await delay(2000);
+
+      // Captura detalhes completos do erro
+      const errorDetails = await ErrorHandler.captureErrorDetails(
+        error,
+        'processCity',
+        'CityService.ts',
+        this.page,
+        undefined,
+        'processCity'
+      );
+
+      const errorMessage = ErrorHandler.formatError(errorDetails);
+      const errorForReport = ErrorHandler.formatErrorForReport(errorDetails);
 
       this.statisticsManager.finishCity(
         city.value,
         stateData.stateValue,
         "error",
-        error.message
+        errorMessage,
+        errorForReport
       );
 
       this.statisticsManager.updateStateFromCity(
@@ -74,27 +90,68 @@ export class CityService {
         0,
         0,
         0,
-        error.message
+        errorMessage,
+        errorForReport
       );
 
-      console.error(`   ❌ Erro: ${error.message}`);
+      console.error(`   ❌ Erro: ${errorMessage}`);
     }
 
     // Tenta voltar para a lista de cidades
     try {
-      await this.page.waitForSelector("#altera_0 a", { timeout: 5000 });
-      console.log("clicando no botão de voltar para a lista de cidade");
-      await this.page.click("#altera_0 a");
+      const botaoAlterar = await this.page.$("#altera_0 a");
+      if (botaoAlterar) {
+        console.log("clicando no botão de voltar para a lista de cidade");
+        try {
+          await this.page.click("#altera_0 a");
+        } catch (error: any) {
+          const errorDetails = await ErrorHandler.captureErrorDetails(
+            error,
+            'processCity (voltar para lista)',
+            'CityService.ts',
+            this.page,
+            '#altera_0 a',
+            'click alterar'
+          );
+          console.error(`❌ Erro ao clicar em #altera_0 a: ${ErrorHandler.formatError(errorDetails)}`);
+          // Navega diretamente em caso de erro
+          await this.page.goto(
+            "https://venda-imoveis.caixa.gov.br/sistema/busca-imovel.asp?sltTipoBusca=imoveis",
+            {
+              waitUntil: "networkidle2",
+              timeout: defaultConfig.navigationTimeoutMs,
+            }
+          );
+        }
+      } else {
+        console.warn("⚠️  Botão #altera_0 a não encontrado, navegando diretamente...");
+        await this.page.goto(
+          "https://venda-imoveis.caixa.gov.br/sistema/busca-imovel.asp?sltTipoBusca=imoveis",
+          {
+            waitUntil: "networkidle2",
+            timeout: defaultConfig.navigationTimeoutMs,
+          }
+        );
+      }
     } catch (error: any) {
       await this.page.goto(
         "https://venda-imoveis.caixa.gov.br/sistema/busca-imovel.asp?sltTipoBusca=imoveis",
         {
           waitUntil: "networkidle2",
+          timeout: defaultConfig.navigationTimeoutMs,
         }
       );
 
+      const errorDetails = await ErrorHandler.captureErrorDetails(
+        error,
+        'processCity (navegação de retorno)',
+        'CityService.ts',
+        this.page,
+        undefined,
+        'navegacao retorno'
+      );
       console.error(
-        `❌ Erro ao clicar no botão de voltar para a lista de cidade: ${error.message}`
+        `❌ Erro ao voltar para lista de cidades: ${ErrorHandler.formatError(errorDetails)}`
       );
     }
 

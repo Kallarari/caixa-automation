@@ -58,21 +58,62 @@ export async function extractPropertyData(page: Page): Promise<DadosImovel> {
     };
 
     const extraiModalidade = () => {
-      const modalidadeDiv = document.querySelectorAll(".control-span-12_12");
+      try {
+        // Estratégia 1: Busca dentro de #divContador (mais específico e confiável)
+        const divContador = document.querySelector("#divContador");
+        if (divContador) {
+          // Tenta buscar o texto dentro de span > b
+          const modalidadeBold = divContador.querySelector("span b");
+          if (modalidadeBold) {
+            const modalidade = modalidadeBold.textContent?.trim() || "";
+            if (modalidade) {
+              return modalidade;
+            }
+          }
+          
+          // Se não encontrou no b, tenta diretamente no .control-span-12_12
+          const modalidadeDiv = divContador.querySelector(".control-span-12_12");
+          if (modalidadeDiv) {
+            const modalidade = modalidadeDiv.textContent?.trim() || "";
+            if (modalidade) {
+              return modalidade;
+            }
+          }
+        }
 
-      if (modalidadeDiv.length === 0) {
+        // Estratégia 2: Fallback - busca em todos os .control-span-12_12
+        const todasDivs = document.querySelectorAll(".control-span-12_12");
+        
+        // Procura por padrões conhecidos de modalidade
+        for (let i = 0; i < todasDivs.length; i++) {
+          const texto = todasDivs[i].textContent?.trim() || "";
+          if (texto) {
+            // Verifica se parece ser uma modalidade (texto curto, sem ":", sem "R$")
+            if (
+              texto.length > 3 && 
+              texto.length < 50 && 
+              !texto.includes(":") && 
+              !texto.includes("R$") &&
+              !texto.includes("m²")
+            ) {
+              // Verifica se contém palavras-chave de modalidade
+              const palavrasChave = ["Compra", "Direta", "Leilão", "Venda", "Alienação"];
+              const temPalavraChave = palavrasChave.some(palavra => 
+                texto.toLowerCase().includes(palavra.toLowerCase())
+              );
+              
+              if (temPalavraChave || i === 1) {
+                return texto;
+              }
+            }
+          }
+        }
+
+        return "";
+      } catch (error) {
+        console.warn("Erro ao extrair modalidade:", error);
         return "";
       }
-
-      if (
-        modalidadeDiv[1]?.textContent === undefined ||
-        modalidadeDiv[1]?.textContent === null
-      ) {
-        return "";
-      }
-
-      const modalidade = modalidadeDiv[1].textContent?.trim() || "";
-      return modalidade;
     };
 
     const extrairDesconto = () => {
@@ -95,6 +136,31 @@ export async function extractPropertyData(page: Page): Promise<DadosImovel> {
       } catch (error) {
         // Em caso de erro inesperado, retorna string vazia
         console.warn("Erro ao extrair desconto:", error);
+        return "";
+      }
+    };
+
+    const extrairValorMinVenda = () => {
+      try {
+        const primeiroParagrafo = document.querySelector(".content p");
+        if (!primeiroParagrafo) {
+          return "";
+        }
+
+        if (primeiroParagrafo.textContent === undefined) {
+          return "";
+        }
+
+        const textoCompleto = primeiroParagrafo.textContent;
+
+        // Extrai "R$ 123.483,05" de "Valor mínimo de venda: R$ 123.483,05"
+        const regexValorMinVenda = /Valor mínimo de venda:\s*(R\$\s*[\d.,]+)/i;
+        const resultado = textoCompleto?.match(regexValorMinVenda);
+
+        return resultado?.[1]?.trim() || "";
+      } catch (error) {
+        // Em caso de erro inesperado, retorna string vazia
+        console.warn("Erro ao extrair valor mínimo de venda:", error);
         return "";
       }
     };
@@ -235,30 +301,23 @@ export async function extractPropertyData(page: Page): Promise<DadosImovel> {
       ) {
         return null;
       }
-      if (dias === 0 && horas === 0 && minutos === 0 && segundos === 0) {
-        return new Date().toISOString();
-      }
 
-      // Cria uma nova data baseada na data atual
-      const dataAtual = new Date();
-      const dataFutura = new Date(dataAtual);
+      // Usa 0 se for null
+      const d = dias ?? 0;
+      const h = horas ?? 0;
+      const m = minutos ?? 0;
+      const s = segundos ?? 0;
 
-      // Adiciona os valores (usando 0 se for null)
-      if (dias !== null) {
-        dataFutura.setDate(dataFutura.getDate() + dias);
-      }
-      if (horas !== null) {
-        dataFutura.setHours(dataFutura.getHours() + horas);
-      }
-      if (minutos !== null) {
-        dataFutura.setMinutes(dataFutura.getMinutes() + minutos);
-      }
-      if (segundos !== null) {
-        dataFutura.setSeconds(dataFutura.getSeconds() + segundos);
-      }
+      // Monta a string por extenso sempre mostrando todos os valores
+      const partes: string[] = [
+        `${d} ${d === 1 ? 'dia' : 'dias'}`,
+        `${h} ${h === 1 ? 'hora' : 'horas'}`,
+        `${m} ${m === 1 ? 'minuto' : 'minutos'}`,
+        `${s} ${s === 1 ? 'segundo' : 'segundos'}`
+      ];
 
-      // Retorna em formato ISO string
-      return dataFutura.toISOString();
+      // Junta as partes com vírgulas e "e" antes da última
+      return `${partes[0]}, ${partes[1]}, ${partes[2]} e ${partes[3]}`;
     };
 
     const dataFimLeilao = calcularDataFutura(dias, horas, minutos, segundos);
@@ -269,6 +328,7 @@ export async function extractPropertyData(page: Page): Promise<DadosImovel> {
         valorAvaliacao,
         valorMinimo1Leilao,
         valorMinimo2Leilao,
+        valorMinVenda: extrairValorMinVenda(),
       },
       caracteristicas: {
         tipoImovel,

@@ -52,7 +52,8 @@ export class StatisticsManager {
     cidadeId: string,
     estadoId: string,
     status: "success" | "error",
-    erro?: string
+    erro?: string,
+    erroDetalhado?: any
   ): void {
     const key = `${estadoId}-${cidadeId}`;
     const cityStats = this.cities.get(key);
@@ -66,6 +67,9 @@ export class StatisticsManager {
       if (erro) {
         cityStats.erro = erro;
       }
+      if (erroDetalhado) {
+        cityStats.erroDetalhado = erroDetalhado;
+      }
 
       // Atualiza estatísticas globais
       this.global.cidadesProcessadas++;
@@ -78,6 +82,7 @@ export class StatisticsManager {
             cidade: cityStats.cidade,
             estado: cityStats.estado,
             erro: erro || "Erro desconhecido",
+            erroDetalhado: erroDetalhado || undefined,
           });
         }
       }
@@ -128,7 +133,8 @@ export class StatisticsManager {
     salvos: number,
     duplicados: number,
     erros: number,
-    erro?: string
+    erro?: string,
+    erroDetalhado?: any
   ): void {
     const stateStats = this.states.get(estadoId);
     if (stateStats) {
@@ -137,7 +143,11 @@ export class StatisticsManager {
         stateStats.cidadesComSucesso++;
       } else {
         stateStats.cidadesComErro++;
-        stateStats.erros.push({ cidade, erro: erro || "Erro desconhecido" });
+        stateStats.erros.push({ 
+          cidade, 
+          erro: erro || "Erro desconhecido",
+          erroDetalhado: erroDetalhado || undefined,
+        });
       }
       stateStats.imoveisSalvos += salvos;
       stateStats.imoveisDuplicados += duplicados;
@@ -162,6 +172,18 @@ export class StatisticsManager {
     const endTime = new Date();
     this.global.tempoTotal = endTime.getTime() - this.startTime.getTime();
     return { ...this.global };
+  }
+
+  getAllCitiesStats(): CityStatistics[] {
+    return Array.from(this.cities.values());
+  }
+
+  getAllStatesStats(): StateStatistics[] {
+    return Array.from(this.states.values());
+  }
+
+  getStartTime(): Date {
+    return this.startTime;
   }
 
   printCityReport(cidadeId: string, estadoId: string): void {

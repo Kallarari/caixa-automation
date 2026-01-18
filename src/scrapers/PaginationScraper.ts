@@ -1,11 +1,13 @@
 import { Page } from "puppeteer";
 import { delay } from "../utils/delay";
+import { defaultConfig } from "../config/scraping.config";
+import { ErrorHandler } from "../utils/errorHandler";
 
 /**
  * Conta quantos imóveis existem na página atual
  */
 export async function contarImoveisNaPagina(page: Page): Promise<number> {
-  await page.waitForSelector("#paginacao", { timeout: 10000 });
+  await page.waitForSelector("#paginacao", { timeout: defaultConfig.selectorTimeoutMs });
 
   const totalImoveis = await page.evaluate(() => {
     const imoveis = document.querySelectorAll("ul.control-group.no-bullets");
@@ -20,7 +22,7 @@ export async function contarImoveisNaPagina(page: Page): Promise<number> {
  */
 export async function obterTotalPaginas(page: Page): Promise<number> {
   try {
-    await page.waitForSelector("#paginacao", { timeout: 5000 });
+    await page.waitForSelector("#paginacao", { timeout: defaultConfig.selectorTimeoutMs });
   } catch (error) {
     // Se não encontrar a paginação, verifica se há imóveis na página
     const temImoveis = await page.evaluate(() => {
@@ -56,19 +58,53 @@ export async function navegarParaPagina(
   page: Page,
   indicePagina: number
 ): Promise<void> {
-  await page.waitForSelector("#paginacao", { timeout: 10000 });
+  try {
+    await page.waitForSelector("#paginacao", { timeout: defaultConfig.selectorTimeoutMs });
+  } catch (error: any) {
+    const errorDetails = await ErrorHandler.captureErrorDetails(
+      error,
+      'navegarParaPagina',
+      'PaginationScraper.ts',
+      page,
+      '#paginacao',
+      'aguardar paginacao'
+    );
+    throw new Error(ErrorHandler.formatError(errorDetails));
+  }
 
-  await page.evaluate((index) => {
-    const paginacaoDiv = document.querySelector("#paginacao");
-    if (paginacaoDiv) {
+  try {
+    const resultado = await page.evaluate((index) => {
+      const paginacaoDiv = document.querySelector("#paginacao");
+      if (!paginacaoDiv) {
+        return { erro: "Div de paginação (#paginacao) não encontrada" };
+      }
+      
       const links = paginacaoDiv.querySelectorAll(
         'a[href*="carregaListaImoveis"]'
       );
-      if (links[index]) {
-        (links[index] as HTMLElement).click();
+      if (!links[index] || !(links[index] instanceof HTMLElement)) {
+        return { erro: `Link de paginação não encontrado no índice ${index}` };
       }
-    }
-  }, indicePagina);
+      
+      links[index].click();
+      return { sucesso: true };
+    }, indicePagina);
 
-  await delay(2000);
+    if (resultado.erro) {
+      throw new Error(resultado.erro);
+    }
+  } catch (error: any) {
+    const errorDetails = await ErrorHandler.captureErrorDetails(
+      error,
+      'navegarParaPagina',
+      'PaginationScraper.ts',
+      page,
+      'a[href*="carregaListaImoveis"]',
+      `click paginacao indice=${indicePagina}`,
+      indicePagina
+    );
+    throw new Error(ErrorHandler.formatError(errorDetails));
+  }
+
+  await delay(defaultConfig.actionDelayMs);
 }

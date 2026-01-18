@@ -3,21 +3,78 @@ import { createBrowser } from "./config/browser.config";
 import { ProcessingFilter } from "./filters/ProcessingFilter";
 import { StatisticsManager } from "./statistics/StatisticsManager";
 import { ScrapingService } from "./services/ScrapingService";
+import { WorkerService } from "./services/WorkerService";
 import { Logger } from "./utils/logger";
 import { getAllCitiesForAllStates } from "./scrapers/CityScraper";
+import { CityDivider } from "./utils/cityDivider";
 
 async function start() {
   Logger.info("Iniciando scraping...");
 
   const config: ScrapingConfig = {
     ...defaultConfig,
-    mode: (process.env.MODE as any) || "all", // 'all' | 'state' | 'city'
-    estadoInicioId: process.env.ESTADO_ID || "", // ID do estado
-    cidadeInicioId: process.env.CIDADE_ID || "", // ID da cidade
-    // ==================================================
+    mode: (process.env.MODE as any) || "all",
+    estadoInicioId: process.env.ESTADO_ID || "",
+    cidadeInicioId: process.env.CIDADE_ID || "",
   };
 
-  // Cria o browser
+  // Modo divide: divide cidades em grupos e salva em arquivos
+  if (config.mode === "divide") {
+    Logger.info("📊 Modo divisão: dividindo cidades em grupos...");
+    
+    const browser = await createBrowser({
+      headless: config.headless,
+      defaultViewport: null,
+    });
+
+    const page = await browser.newPage();
+    await page.goto(config.baseUrl, {
+      waitUntil: "networkidle2",
+      timeout: config.navigationTimeoutMs,
+    });
+
+    const cities = await getAllCitiesForAllStates(page);
+    CityDivider.divideAndSave(cities);
+    
+    await browser.close();
+    Logger.success("✅ Divisão concluída! Execute os workers agora.");
+    return;
+  }
+
+  // Modo worker: processa grupo específico
+  if (config.mode === "worker") {
+    const workerId = parseInt(process.env.WORKER_ID || "0");
+    
+    if (isNaN(workerId) || workerId < 0 || workerId >= 6) {
+      Logger.error("❌ WORKER_ID deve ser um número entre 0 e 5");
+      return;
+    }
+
+    const browser = await createBrowser({
+      headless: config.headless,
+      defaultViewport: null,
+    });
+
+    const page = await browser.newPage();
+    await page.goto(config.baseUrl, {
+      waitUntil: "networkidle2",
+      timeout: config.navigationTimeoutMs,
+    });
+
+    const workerService = new WorkerService(workerId, page);
+
+    try {
+      await workerService.processWorkerCities();
+    } catch (error: any) {
+      Logger.error(`❌ Erro no worker ${workerId + 1}: ${error.message}`);
+    } finally {
+      await browser.close();
+    }
+
+    return;
+  }
+
+  // Modos normais: all, state, city
   const browser = await createBrowser({
     headless: config.headless,
     defaultViewport: null,
@@ -27,6 +84,7 @@ async function start() {
 
   await page.goto(config.baseUrl, {
     waitUntil: "networkidle2",
+    timeout: config.navigationTimeoutMs,
   });
 
   // Obtém todas as cidades para inicializar estatísticas

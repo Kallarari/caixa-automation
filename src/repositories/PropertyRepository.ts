@@ -6,6 +6,7 @@ export interface PropertyData {
   valor_avaliacao: string | null;
   valor_minimo_1_leilao: string | null;
   valor_minimo_2_leilao: string | null;
+  valor_min_venda: string | null;
   tipo_imovel: string | null;
   quartos: number | null;
   garagem: number | null;
@@ -43,15 +44,15 @@ export class PropertyRepository {
   async create(property: PropertyData): Promise<number> {
     const query = `
       INSERT INTO property_bronze (
-        titulo, imagem_url, valor_avaliacao, valor_minimo_1_leilao, valor_minimo_2_leilao,
+        titulo, imagem_url, valor_avaliacao, valor_minimo_1_leilao, valor_minimo_2_leilao, valor_min_venda,
         tipo_imovel, quartos, garagem, area_total, area_privativa, area_terreno,
         numero_imovel, matriculas, comarca, oficio, inscricao_imobiliaria, averbacao_leiloes_negativos,
         tipo_leilao, edital, numero_item, leiloeiro, data_1_leilao, data_2_leilao,
         endereco, cep, cidade, estado,
-        descricao, formas_pagamento, regras_despesas, observacoes,data_fim_leilao
+        descricao, formas_pagamento, regras_despesas, observacoes, data_fim_leilao, desconto
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
+        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34
       ) RETURNING id
     `;
 
@@ -61,6 +62,7 @@ export class PropertyRepository {
       property.valor_avaliacao || null,
       property.valor_minimo_1_leilao || null,
       property.valor_minimo_2_leilao || null,
+      property.valor_min_venda || null,
       property.tipo_imovel || null,
       property.quartos,
       property.garagem,
@@ -88,6 +90,7 @@ export class PropertyRepository {
       property.regras_despesas || null,
       property.observacoes || null,
       property.dataFimLeilao || null,
+      property.desconto || null,
     ];
 
     try {
@@ -134,15 +137,15 @@ export class PropertyRepository {
   ): Promise<number> {
     const query = `
       INSERT INTO property_bronze (
-        titulo, imagem_url, valor_avaliacao, valor_minimo_1_leilao, valor_minimo_2_leilao,
+        titulo, imagem_url, valor_avaliacao, valor_minimo_1_leilao, valor_minimo_2_leilao, valor_min_venda,
         tipo_imovel, quartos, garagem, area_total, area_privativa, area_terreno,
         numero_imovel, matriculas, comarca, oficio, inscricao_imobiliaria, averbacao_leiloes_negativos,
         tipo_leilao, edital, numero_item, leiloeiro, data_1_leilao, data_2_leilao,
         endereco, cep, cidade, estado,
-        descricao, formas_pagamento, regras_despesas, observacoes, desconto
+        descricao, formas_pagamento, regras_despesas, observacoes, data_fim_leilao, desconto
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
+        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34
       ) RETURNING id
     `;
 
@@ -152,6 +155,7 @@ export class PropertyRepository {
       property.valor_avaliacao || null,
       property.valor_minimo_1_leilao || null,
       property.valor_minimo_2_leilao || null,
+      property.valor_min_venda || null,
       property.tipo_imovel || null,
       property.quartos,
       property.garagem,
@@ -178,6 +182,7 @@ export class PropertyRepository {
       property.formas_pagamento || null,
       property.regras_despesas || null,
       property.observacoes || null,
+      property.dataFimLeilao || null,
       property.desconto || null,
     ];
 
