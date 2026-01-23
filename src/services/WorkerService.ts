@@ -12,6 +12,8 @@ import { defaultConfig } from '../config/scraping.config';
 export class WorkerService {
   private cityService: CityService | null = null;
   private statisticsManager: StatisticsManager;
+  private readonly baseUrl =
+    "https://venda-imoveis.caixa.gov.br/sistema/busca-imovel.asp?sltTipoBusca=imoveis";
 
   constructor(
     private workerId: number,
@@ -21,7 +23,7 @@ export class WorkerService {
     this.statisticsManager = new StatisticsManager(0, 0);
   }
 
-  async processWorkerCities(): Promise<void> {
+  async processWorkerCities(workerName?: string): Promise<void> {
     Logger.separator('=');
     Logger.info(`🚀 WORKER ${this.workerId + 1} INICIANDO`);
     Logger.separator('=');
@@ -50,92 +52,16 @@ export class WorkerService {
       this.statisticsManager
     );
 
-    let lastStateValue: string | null = null;
-    const baseUrl = "https://venda-imoveis.caixa.gov.br/sistema/busca-imovel.asp?sltTipoBusca=imoveis";
-    
-    // Conta quantas cidades cada estado tem para inicializar corretamente
-    const estadosMap = new Map<string, { state: string; count: number }>();
-    cities.forEach(({ state, stateValue }) => {
-      const existing = estadosMap.get(stateValue);
-      if (existing) {
-        existing.count++;
-      } else {
-        estadosMap.set(stateValue, { state, count: 1 });
-      }
-    });
+    const failedCities = await this.processCitiesBatch(cities, "primeira passada");
 
-    // Processa cada cidade
-    for (let i = 0; i < cities.length; i++) {
-      const { state, stateValue, city } = cities[i];
-      
+    if (failedCities.length > 0) {
+      Logger.separator("-");
       Logger.info(
-        `\n[Worker ${this.workerId + 1}] ${i + 1}/${cities.length}: ${city.innerText} - ${state}`
+        `🔁 Reprocessando ${failedCities.length} cidades com erro...`
       );
-
-      try {
-        // Se mudou de estado, inicializa estatísticas do estado e navega para a página inicial
-        if (lastStateValue !== stateValue) {
-          // Inicializa estatísticas do estado
-          const estadoInfo = estadosMap.get(stateValue);
-          if (estadoInfo) {
-            this.statisticsManager.startState(
-              estadoInfo.state,
-              stateValue,
-              estadoInfo.count
-            );
-          }
-          
-          // Se não é o primeiro estado, finaliza o anterior
-          if (lastStateValue !== null) {
-            this.statisticsManager.finishState(lastStateValue);
-          }
-          
-          Logger.info(
-            `[Worker ${this.workerId + 1}] 🔄 Mudou de estado, navegando para página inicial...`
-          );
-          await this.page.goto(baseUrl, {
-            waitUntil: "networkidle2",
-            timeout: defaultConfig.navigationTimeoutMs,
-          });
-          // Aguarda os seletores estarem disponíveis
-          await this.page.waitForSelector("#cmb_estado", { timeout: defaultConfig.selectorTimeoutMs });
-          lastStateValue = stateValue;
-        }
-
-        if (!this.cityService) {
-          throw new Error("CityService não foi inicializado");
-        }
-        
-        await this.cityService.processCity(city, {
-          state,
-          stateValue,
-        });
-      } catch (error: any) {
-        Logger.error(
-          `[Worker ${this.workerId + 1}] ❌ Erro: ${error.message}`
-        );
-        
-        // Em caso de erro, volta para a página inicial para o próximo processamento
-        try {
-          await this.page.goto(baseUrl, {
-            waitUntil: "networkidle2",
-            timeout: defaultConfig.navigationTimeoutMs,
-          });
-          await this.page.waitForSelector("#cmb_estado", { timeout: defaultConfig.selectorTimeoutMs });
-          lastStateValue = null; // Força navegação na próxima iteração
-        } catch (navError) {
-          Logger.warn(
-            `[Worker ${this.workerId + 1}] ⚠️  Erro ao navegar para página inicial: ${(navError as any).message}`
-          );
-        }
-      }
+      Logger.separator("-");
+      await this.processCitiesBatch(failedCities, "retry");
     }
-    
-    // Finaliza o último estado processado
-    if (lastStateValue !== null) {
-      this.statisticsManager.finishState(lastStateValue);
-    }
-
     Logger.separator('=');
     Logger.info(`✅ WORKER ${this.workerId + 1} CONCLUÍDO`);
     Logger.separator('=');
@@ -144,10 +70,10 @@ export class WorkerService {
     this.statisticsManager.printGlobalReport();
 
     // Salva relatório detalhado em JSON
-    this.saveReportToJson();
+    this.saveReportToJson(workerName);
   }
 
-  private saveReportToJson(): void {
+  private saveReportToJson(workerName?: string): void {
     try {
       const globalStats = this.statisticsManager.getGlobalStats();
       const citiesStats = this.statisticsManager.getAllCitiesStats();
@@ -268,7 +194,7 @@ export class WorkerService {
       }
 
       // Salva o relatório
-      const reportPath = path.join(tempDir, `worker-${this.workerId}-report.json`);
+      const reportPath = path.join(tempDir, `worker-${workerName?? this.workerId}-report.json`);
       fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf-8');
 
       Logger.success(
@@ -288,5 +214,101 @@ export class WorkerService {
         `❌ Erro ao salvar relatório do worker ${this.workerId + 1}: ${error.message}`
       );
     }
+  }
+
+  private buildEstadosMap(
+    cities: CityItem[]
+  ): Map<string, { state: string; count: number }> {
+    const estadosMap = new Map<string, { state: string; count: number }>();
+    cities.forEach(({ state, stateValue }) => {
+      const existing = estadosMap.get(stateValue);
+      if (existing) {
+        existing.count++;
+      } else {
+        estadosMap.set(stateValue, { state, count: 1 });
+      }
+    });
+    return estadosMap;
+  }
+
+  private async processCitiesBatch(
+    cities: CityItem[],
+    batchLabel: string
+  ): Promise<CityItem[]> {
+    let lastStateValue: string | null = null;
+    const estadosMap = this.buildEstadosMap(cities);
+    const failedCities: CityItem[] = [];
+
+    for (let i = 0; i < cities.length; i++) {
+      const { state, stateValue, city } = cities[i];
+
+      Logger.info(
+        `\n[Worker ${this.workerId + 1} - ${batchLabel}] ${i + 1}/${cities.length}: ${city.innerText} - ${state}`
+      );
+
+      try {
+        if (lastStateValue !== stateValue) {
+          const estadoInfo = estadosMap.get(stateValue);
+          if (estadoInfo) {
+            this.statisticsManager.startState(
+              estadoInfo.state,
+              stateValue,
+              estadoInfo.count
+            );
+          }
+
+          if (lastStateValue !== null) {
+            this.statisticsManager.finishState(lastStateValue);
+          }
+
+          Logger.info(
+            `[Worker ${this.workerId + 1} - ${batchLabel}] 🔄 Mudou de estado, navegando para página inicial...`
+          );
+          await this.page.goto(this.baseUrl, {
+            waitUntil: "networkidle2",
+            timeout: defaultConfig.navigationTimeoutMs,
+          });
+          await this.page.waitForSelector("#cmb_estado", {
+            timeout: defaultConfig.selectorTimeoutMs,
+          });
+          lastStateValue = stateValue;
+        }
+
+        if (!this.cityService) {
+          throw new Error("CityService não foi inicializado");
+        }
+
+        await this.cityService.processCity(city, {
+          state,
+          stateValue,
+        });
+      } catch (error: any) {
+        Logger.error(
+          `[Worker ${this.workerId + 1} - ${batchLabel}] ❌ Erro: ${error.message}`
+        );
+        failedCities.push({ state, stateValue, city });
+
+        try {
+          await this.page.goto(this.baseUrl, {
+            waitUntil: "networkidle2",
+            timeout: defaultConfig.navigationTimeoutMs,
+          });
+          await this.page.waitForSelector("#cmb_estado", {
+            timeout: defaultConfig.selectorTimeoutMs,
+          });
+          lastStateValue = null;
+        } catch (navError) {
+          Logger.warn(
+            `[Worker ${this.workerId + 1} - ${batchLabel}] ⚠️  Erro ao navegar para página inicial: ${(navError as any).message}`
+          );
+        }
+      }
+    }
+
+    if (lastStateValue !== null) {
+      this.statisticsManager.finishState(lastStateValue);
+    }
+
+    return failedCities;
   }
 }

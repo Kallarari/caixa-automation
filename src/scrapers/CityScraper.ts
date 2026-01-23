@@ -235,13 +235,16 @@ export async function selectCity(page: Page, city: string, state: string): Promi
   // Seleciona a cidade
   await page.select("#cmb_cidade", city);
   console.log(`✅ Cidade ${city} selecionada`);
-  await delay(defaultConfig.actionDelayMs);
 
+  await delay(3000);
+  if(city === "7186" || city === "RIO DE JANEIRO"){
+    await delay(5000);
+  }
   // Clica no primeiro botão "Próximo"
   await safeClickButton(page, "#btn_next0", "click btn_next0", 3);
 
   // Clica no segundo botão "Próximo"
-  await safeClickButton(page, "#btn_next1", "click btn_next1");
+  await safeClickButton(page, "#btn_next1", "click btn_next1", 2 );
 
   await delay(defaultConfig.actionDelayMs);
 

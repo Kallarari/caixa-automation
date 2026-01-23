@@ -73,15 +73,20 @@ export async function navegarParaPagina(
   }
 
   try {
-    const resultado = await page.evaluate((index) => {
+    const resultado = await page.evaluate(async(index) => {
       const paginacaoDiv = document.querySelector("#paginacao");
       if (!paginacaoDiv) {
         return { erro: "Div de paginação (#paginacao) não encontrada" };
       }
-      
+
+      await page.waitForSelector('#paginacao a[href*="carregaListaImoveis"]', {
+        timeout: 5000,
+      });
+
       const links = paginacaoDiv.querySelectorAll(
         'a[href*="carregaListaImoveis"]'
       );
+
       if (!links[index] || !(links[index] instanceof HTMLElement)) {
         return { erro: `Link de paginação não encontrado no índice ${index}` };
       }
