@@ -44,9 +44,13 @@ async function start() {
   // Modo worker: processa grupo específico
   if (config.mode === "worker") {
     const workerId = parseInt(process.env.WORKER_ID || "0");
-    
-    if (isNaN(workerId) || workerId < 0 || workerId >= 6) {
-      Logger.error("❌ WORKER_ID deve ser um número entre 0 e 5");
+    const workerCount = parseInt(process.env.WORKER_COUNT || "6");
+    const maxWorkerId = workerCount - 1;
+
+    if (isNaN(workerId) || workerId < 0 || workerId >= workerCount) {
+      Logger.error(
+        `❌ WORKER_ID deve ser um número entre 0 e ${maxWorkerId}`
+      );
       return;
     }
 

@@ -13,8 +13,19 @@ export interface CityItem {
 }
 
 export class CityDivider {
-  private static readonly NUM_WORKERS = 6;
   private static readonly TEMP_DIR = path.join(process.cwd(), 'temp');
+  private static readonly DEFAULT_WORKER_COUNT = 6;
+
+  private static getWorkerCount(): number {
+    const raw = process.env.WORKER_COUNT;
+    const parsed = raw ? parseInt(raw, 10) : NaN;
+
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return this.DEFAULT_WORKER_COUNT;
+    }
+
+    return parsed;
+  }
 
   /**
    * Achata a estrutura de estados/cidades em um array simples
@@ -38,13 +49,14 @@ export class CityDivider {
    */
   static divideIntoGroups(cities: CityItem[]): CityItem[][] {
     const groups: CityItem[][] = [];
+    const workerCount = this.getWorkerCount();
 
-    for (let i = 0; i < this.NUM_WORKERS; i++) {
+    for (let i = 0; i < workerCount; i++) {
       groups.push([]);
     }
 
     cities.forEach((item, index) => {
-      groups[index % this.NUM_WORKERS].push(item);
+      groups[index % workerCount].push(item);
     });
 
     return groups;
