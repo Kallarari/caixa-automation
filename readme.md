@@ -84,3 +84,12 @@ Algumas funções utilitarias como delay, logger e notify.
    ↓
 10. Fecha browser
 
+### Execução paralela
+
+- Windows:
+  - `npm run parallel`
+- Linux:
+  - `npm run parallel:linux`
+  - Para definir quantidade de workers: `npm run parallel:linux -- 4`
+
+No Linux os workers rodam em background e escrevem logs em `temp/worker-<id>.log`.

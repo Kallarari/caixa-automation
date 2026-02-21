@@ -24,7 +24,7 @@ export interface ScrapingConfig {
 export const defaultConfig: ScrapingConfig = {
   mode: 'worker',
   timeout: 10000,
-  headless: false,
+  headless: true,
   selectorTimeoutMs: 10000,
   navigationTimeoutMs: 30000,
   actionDelayMs: 800,

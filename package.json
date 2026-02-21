@@ -9,6 +9,7 @@
     "divide": "MODE=divide npm run dev",
     "worker": "MODE=worker npm run dev",
     "parallel": "powershell -ExecutionPolicy Bypass -File scripts/start-parallel.ps1",
+    "parallel:linux": "bash scripts/start-parallel.sh",
     "retry": "ts-node src/scripts/retryWorker.ts"
   },
   "keywords": [],
