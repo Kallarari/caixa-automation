@@ -8,7 +8,7 @@ import { ErrorHandler } from "../utils/errorHandler";
  * Pega as options do seletor de estados
  */
 export async function getStates(page: Page): Promise<StateOption[]> {
-  delay(defaultConfig.actionDelayMs);
+  await delay(defaultConfig.actionDelayMs);
   const estados = (await page.evaluate(() => {
     const selectEstado = document.querySelector(
       "#cmb_estado"
@@ -47,7 +47,7 @@ export async function getStates(page: Page): Promise<StateOption[]> {
  * Com um estado selecionado, pega as options do seletor de cidades
  */
 export async function getCities(page: Page): Promise<CityOption[]> {
-  delay(defaultConfig.actionDelayMs);
+  await delay(defaultConfig.actionDelayMs);
   const cities = (await page.evaluate(() => {
     const selectCity = document.querySelector(
       "#cmb_cidade"
