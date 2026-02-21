@@ -41,7 +41,7 @@ export class PropertyRepository {
   /**
    * Salva um imóvel no banco de dados
    */
-  async create(property: PropertyData): Promise<number> {
+  async create(property: PropertyData): Promise<number | null> {
     const query = `
       INSERT INTO property_bronze (
         titulo, imagem_url, valor_avaliacao, valor_minimo_1_leilao, valor_minimo_2_leilao, valor_min_venda,
@@ -53,7 +53,9 @@ export class PropertyRepository {
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
         $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34
-      ) RETURNING id
+      )
+      ON CONFLICT DO NOTHING
+      RETURNING id
     `;
 
     const values = [
@@ -95,6 +97,9 @@ export class PropertyRepository {
 
     try {
       const result = await pool.query(query, values);
+      if (result.rows.length === 0) {
+        return null;
+      }
       return result.rows[0].id;
     } catch (error) {
       console.error("Erro ao salvar imóvel no banco de dados:", error);
@@ -106,19 +111,91 @@ export class PropertyRepository {
    * Salva múltiplos imóveis em uma transação
    */
   async createMany(properties: PropertyData[]): Promise<number[]> {
+    if (properties.length === 0) {
+      return [];
+    }
+
     const client = await pool.connect();
-    const ids: number[] = [];
 
     try {
       await client.query("BEGIN");
+      const placeholders: string[] = [];
+      const values: any[] = [];
+      const columnsPerRow = 34;
 
-      for (const property of properties) {
-        const id = await this.createWithClient(client, property);
-        ids.push(id);
-      }
+      properties.forEach((property, index) => {
+        const offset = index * columnsPerRow;
+        placeholders.push(
+          `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${
+            offset + 5
+          }, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9}, $${
+            offset + 10
+          }, $${offset + 11}, $${offset + 12}, $${offset + 13}, $${offset + 14}, $${
+            offset + 15
+          }, $${offset + 16}, $${offset + 17}, $${offset + 18}, $${offset + 19}, $${
+            offset + 20
+          }, $${offset + 21}, $${offset + 22}, $${offset + 23}, $${offset + 24}, $${
+            offset + 25
+          }, $${offset + 26}, $${offset + 27}, $${offset + 28}, $${offset + 29}, $${
+            offset + 30
+          }, $${offset + 31}, $${offset + 32}, $${offset + 33}, $${offset + 34})`
+        );
+
+        values.push(
+          property.titulo,
+          property.imagem_url || null,
+          property.valor_avaliacao || null,
+          property.valor_minimo_1_leilao || null,
+          property.valor_minimo_2_leilao || null,
+          property.valor_min_venda || null,
+          property.tipo_imovel || null,
+          property.quartos,
+          property.garagem,
+          property.area_total || null,
+          property.area_privativa || null,
+          property.area_terreno || null,
+          property.numero_imovel || null,
+          property.matriculas || null,
+          property.comarca || null,
+          property.oficio,
+          property.inscricao_imobiliaria || null,
+          property.averbacao_leiloes_negativos || null,
+          property.tipo_leilao || null,
+          property.edital || null,
+          property.numero_item || null,
+          property.leiloeiro || null,
+          property.data_1_leilao || null,
+          property.data_2_leilao || null,
+          property.endereco || null,
+          property.cep || null,
+          property.cidade || null,
+          property.estado || null,
+          property.descricao || null,
+          property.formas_pagamento || null,
+          property.regras_despesas || null,
+          property.observacoes || null,
+          property.dataFimLeilao || null,
+          property.desconto || null
+        );
+      });
+
+      const query = `
+        INSERT INTO property_bronze (
+          titulo, imagem_url, valor_avaliacao, valor_minimo_1_leilao, valor_minimo_2_leilao, valor_min_venda,
+          tipo_imovel, quartos, garagem, area_total, area_privativa, area_terreno,
+          numero_imovel, matriculas, comarca, oficio, inscricao_imobiliaria, averbacao_leiloes_negativos,
+          tipo_leilao, edital, numero_item, leiloeiro, data_1_leilao, data_2_leilao,
+          endereco, cep, cidade, estado,
+          descricao, formas_pagamento, regras_despesas, observacoes, data_fim_leilao, desconto
+        ) VALUES ${placeholders.join(", ")}
+        ON CONFLICT DO NOTHING
+        RETURNING id
+      `;
+
+      const result = await client.query(query, values);
 
       await client.query("COMMIT");
-      return ids;
+      return result.rows.map((row: any) => row.id);
     } catch (error) {
       await client.query("ROLLBACK");
       console.error("Erro ao salvar múltiplos imóveis:", error);

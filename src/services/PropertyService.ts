@@ -50,37 +50,22 @@ export class PropertyService {
   async saveProperties(
     propertiesData: DadosImovel[]
   ): Promise<{ salvos: number; duplicados: number; erros: number }> {
-    let salvos = 0;
-    let duplicados = 0;
-    let erros = 0;
+    try {
+      const properties = propertiesData.map(mapearParaPropertyData);
+      const insertedIds = await this.propertyRepository.createMany(properties);
 
-    for (const dados of propertiesData) {
-      try {
-        const propertyData = mapearParaPropertyData(dados);
+      const salvos = insertedIds.length;
+      const duplicados = Math.max(propertiesData.length - salvos, 0);
+      const erros = 0;
 
-        // Verifica se o imóvel já existe antes de salvar
-        const existe = await this.propertyRepository.existsByFields(
-          propertyData
-        );
+      console.log(
+        `✅ Lote processado: ${salvos} salvos, ${duplicados} duplicados`
+      );
 
-        if (existe) {
-          duplicados++;
-        } else {
-          const id = await this.propertyRepository.create(propertyData);
-          console.log(
-            `✅ Imóvel salvo com sucesso (ID: ${id}): ${dados.titulo}`
-          );
-          salvos++;
-        }
-      } catch (error: any) {
-        console.error(
-          `❌ Erro ao salvar imóvel "${dados.titulo}":`,
-          error.message
-        );
-        erros++;
-      }
+      return { salvos, duplicados, erros };
+    } catch (error: any) {
+      console.error("❌ Erro ao salvar lote de imóveis:", error.message);
+      return { salvos: 0, duplicados: 0, erros: propertiesData.length };
     }
-
-    return { salvos, duplicados, erros };
   }
 }

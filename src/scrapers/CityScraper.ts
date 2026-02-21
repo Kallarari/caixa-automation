@@ -246,6 +246,8 @@ export async function selectCity(page: Page, city: string, state: string): Promi
   // Clica no segundo botão "Próximo"
   await safeClickButton(page, "#btn_next1", "click btn_next1", 2 );
 
+  await safeClickButton(page, "#btn_next2", "click btn_next2", 2 );
+
   await delay(defaultConfig.actionDelayMs);
 
   console.log("✅ Cidade selecionada e página carregada!");

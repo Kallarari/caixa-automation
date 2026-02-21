@@ -2,7 +2,7 @@
 # Divide as cidades e inicia cada worker em uma janela separada
 
 # Quantidade de workers (ajuste aqui)
-$WORKER_COUNT = 4
+$WORKER_COUNT = 2
 
 Write-Host "Iniciando processamento paralelo com $WORKER_COUNT workers..." -ForegroundColor Green
 Write-Host ""
